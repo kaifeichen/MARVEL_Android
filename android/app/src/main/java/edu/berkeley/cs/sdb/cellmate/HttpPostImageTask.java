@@ -54,7 +54,7 @@ public class HttpPostImageTask extends AsyncTask<Void, Void, String> {
         mListener = listener;
     }
 
-    byte[] compressJPEG(byte[] imageData, int width, int height) {
+    static byte[] compressJPEG(byte[] imageData, int width, int height) {
         Mat image = new Mat(height, width, CvType.CV_8UC1);
         image.put(0, 0, imageData);
 

@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <ListPreference
+        android:key="mode_list"
+        android:defaultValue="BOSSWAVE"
+        android:title="Mode"
+        android:entries="@array/mode_types"
+        android:entryValues="@array/mode_values"
+        android:icon="@mipmap/ic_launcher"
+        android:summary="choose a mode for sending image"
+            />
     <EditTextPreference
         android:defaultValue="@string/cellmate_server_addr_val"
         android:key="@string/cellmate_server_addr_key"
