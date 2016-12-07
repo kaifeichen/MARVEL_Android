@@ -9,7 +9,7 @@ import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
 import edu.berkeley.cs.sdb.bosswave.ChainElaborationLevel;
 import edu.berkeley.cs.sdb.bosswave.PayloadObject;
 import edu.berkeley.cs.sdb.bosswave.PublishRequest;
-import edu.berkeley.cs.sdb.bosswave.Response;
+import edu.berkeley.cs.sdb.bosswave.BosswaveResponse;
 import edu.berkeley.cs.sdb.bosswave.ResponseHandler;
 
 public class BosswavePublishTask extends AsyncTask<Void, Void, String> {
@@ -36,11 +36,13 @@ public class BosswavePublishTask extends AsyncTask<Void, Void, String> {
 
     private ResponseHandler mResponseHandler = new ResponseHandler() {
         @Override
-        public void onResponseReceived(Response response) {
+        public void onResponseReceived(BosswaveResponse response) {
             mResult = response.getStatus();
             mSem.release();
         }
     };
+
+
 
     @Override
     protected String doInBackground(Void... voids) {

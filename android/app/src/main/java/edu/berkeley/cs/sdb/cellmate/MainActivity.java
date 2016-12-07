@@ -24,6 +24,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.preference.ListPreference;
 import android.preference.PreferenceManager;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.ActionBarActivity;
@@ -48,6 +49,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.RunnableFuture;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -97,6 +99,10 @@ public class MainActivity extends ActionBarActivity {
     private boolean mIsBosswaveConnected;
     // The current recognized object name
     private String mTarget;
+
+    public void testClicked(View view) {
+        showToast("test button clicked", Toast.LENGTH_LONG);
+    }
 
     private TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
         @Override
@@ -172,6 +178,36 @@ public class MainActivity extends ActionBarActivity {
         }
     };
 
+    private class BWPublishImageRunnable implements Runnable {
+        private final byte[] mImageData;
+        private final int mWidth;
+        private final int mHeight;
+        private final double mFx;
+        private final double mFy;
+        private final double mCx;
+        private final double mCy;
+
+        public BWPublishImageRunnable(byte[] imageData, int width, int height, double fx, double fy, double cx, double cy) {
+            mImageData = imageData;
+            mWidth = width;
+            mHeight = height;
+            mFx = fx;
+            mFy = fy;
+            mCx = cx;
+            mCy = cy;
+        }
+
+        @Override
+        public void run() {
+            try {
+                String topic = "scratch.ns/cellmate";
+                System.out.println(topic);
+                new BosswavePublishImageTask(mBosswaveClient, topic, mImageData, mWidth, mHeight, mFx, mFy, mCx, mCy, mBwPubImaTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
     private class HttpPostImageRunnable implements Runnable {
         private final byte[] mImageData;
         private final int mWidth;
@@ -209,7 +245,15 @@ public class MainActivity extends ActionBarActivity {
         @Override
         public void onImageAvailable(byte[] imageData, int width, int height, double fx, double fy, double cx, double cy) {
             // AsyncTask task instance must be created and executed on the UI thread
-            runOnUiThread(new HttpPostImageRunnable(imageData, width, height, fx, fy, cx, cy));
+            SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+            String mode = preferences.getString("mode_list", "HTTP");
+            if(mode.equals("HTTP")) {
+                runOnUiThread(new HttpPostImageRunnable(imageData, width, height, fx, fy, cx, cy));
+            } else if(mode.equals("BOSSWAVE")){
+                runOnUiThread(new BWPublishImageRunnable(imageData, width, height, fx, fy, cx, cy));
+            } else {
+                showToast(mode, Toast.LENGTH_LONG);
+            }
         }
     };
 
@@ -310,11 +354,13 @@ public class MainActivity extends ActionBarActivity {
         }
     };
 
+
     private BosswaveInitTask.Listener mBwInitTaskListener = new BosswaveInitTask.Listener() {
         @Override
-        public void onResponse(boolean success) {
+        public void onResponse(boolean success, BosswaveClient client) {
             if (success) {
                 showToast("Bosswave connected", Toast.LENGTH_SHORT);
+                mBosswaveClient = client;
                 mIsBosswaveConnected = true;
                 if (mTarget != null) {
                     setButtonsEnabled(true, true, true);
@@ -340,6 +386,29 @@ public class MainActivity extends ActionBarActivity {
         }
     };
 
+    private BosswavePublishImageTask.Listener mBwPubImaTaskListener = new BosswavePublishImageTask.Listener() {
+        @Override
+        public void onResponse(String response) {
+            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
+            if (response == null) {
+                showToast("Network error", Toast.LENGTH_SHORT);
+                mTarget = null;
+                mTextView.setText(getString(R.string.none));
+                setButtonsEnabled(false, false, true);
+            } else if (response.trim().equals("None")) {
+                showToast("Nothing recognized", Toast.LENGTH_SHORT);
+                mTarget = null;
+                mTextView.setText(getString(R.string.none));
+                setButtonsEnabled(false, false, true);
+            } else {
+                showToast(response + " recognized", Toast.LENGTH_SHORT);
+                mTarget = response.trim();
+                mTextView.setText(response);
+                setButtonsEnabled(true, true, true);
+            }
+        }
+    };
+
     private BosswavePublishTask.Listener mBwPubTaskListener = new BosswavePublishTask.Listener() {
         @Override
         public void onResponse(String response) {
@@ -347,6 +416,7 @@ public class MainActivity extends ActionBarActivity {
             setButtonsEnabled(true, true, true);
         }
     };
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -436,15 +506,14 @@ public class MainActivity extends ActionBarActivity {
             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
             String bosswaveRouterAddr = preferences.getString(getString(R.string.bosswave_router_addr_key), getString(R.string.bosswave_router_addr_val));
             int bosswaveRouterPort = Integer.parseInt(preferences.getString(getString(R.string.bosswave_router_port_key), getString(R.string.bosswave_router_port_val)));
-            mBosswaveClient = new BosswaveClient(bosswaveRouterAddr, bosswaveRouterPort);
-            String bosswaveKey = preferences.getString(getString(R.string.bosswave_key_base64_key), getString(R.string.bosswave_key_base64_val));
-            final byte[] mKey = Base64.decode(bosswaveKey, Base64.DEFAULT);
             try {
+                String bosswaveKey = preferences.getString(getString(R.string.bosswave_key_base64_key), getString(R.string.bosswave_key_base64_val));
+                final byte[] mKey = Base64.decode(bosswaveKey, Base64.DEFAULT);
                 File tempKeyFile = File.createTempFile("key", null, null);
                 tempKeyFile.deleteOnExit();
                 FileOutputStream fos = new FileOutputStream(tempKeyFile);
                 fos.write(mKey);
-                new BosswaveInitTask(mBosswaveClient, tempKeyFile, mBwInitTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new BosswaveInitTask(tempKeyFile, mBwInitTaskListener,bosswaveRouterAddr,bosswaveRouterPort).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (IOException e) {
                 e.printStackTrace();
             }

@@ -13,4 +13,14 @@
         <item>Sintel</item>
         <item>Tears of Steel</item>
     </string-array>
+
+    <string-array name="mode_types">
+        <item>BOSSWAVE</item>
+        <item>HTTP</item>
+    </string-array>
+
+    <string-array name="mode_values">
+        <item>BOSSWAVE</item>
+        <item>HTTP</item>
+    </string-array>
 </resources>

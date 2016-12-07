@@ -8,7 +8,7 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
-import edu.berkeley.cs.sdb.bosswave.Response;
+import edu.berkeley.cs.sdb.bosswave.BosswaveResponse;
 import edu.berkeley.cs.sdb.bosswave.ResponseHandler;
 
 public class BosswaveInitTask extends AsyncTask<Void, Void, Boolean> {
@@ -17,25 +17,32 @@ public class BosswaveInitTask extends AsyncTask<Void, Void, Boolean> {
     private Listener mTaskListener;
     private Semaphore mSem;
     private AtomicBoolean mSuccess;
+    private String mBosswaveRouterAddr;
+    private int mBbosswaveRouterPort;
 
     public interface Listener {
-        void onResponse(boolean success);
+        void onResponse(boolean success, BosswaveClient client);
     }
 
-    public BosswaveInitTask(BosswaveClient bosswaveClient, File keyFile, Listener listener) {
-        mBosswaveClient = bosswaveClient;
+    public BosswaveInitTask(File keyFile, Listener listener, String bosswaveRouterAddr, int bosswaveRouterPort) {
         mKeyFile = keyFile;
         mTaskListener = listener;
         mSem = new Semaphore(0);
         mSuccess = new AtomicBoolean(false);
+        mBosswaveRouterAddr = bosswaveRouterAddr;
+        mBbosswaveRouterPort = bosswaveRouterPort;
+        System.out.println("bowsss wave inite ");
+
     }
 
     private ResponseHandler mResponseHandler = new ResponseHandler() {
         @Override
-        public void onResponseReceived(Response response) {
+        public void onResponseReceived(BosswaveResponse response) {
             if (response.getStatus().equals("okay")) {
+                System.out.println("bowsss wave inite successfullllllllly");
                 mSuccess.set(true);
             } else {
+
                 mSuccess.set(false);
             }
             mSem.release();
@@ -45,8 +52,11 @@ public class BosswaveInitTask extends AsyncTask<Void, Void, Boolean> {
     @Override
     protected Boolean doInBackground(Void... voids) {
         try {
-            mBosswaveClient.connect();
-            mBosswaveClient.setEntityFile(mKeyFile, mResponseHandler);
+            mBosswaveClient = new BosswaveClient(mBosswaveRouterAddr, mBbosswaveRouterPort);
+            // Set the Bosswave entity to be used for subsequent operations
+            mBosswaveClient.setEntityFromFile(mKeyFile, mResponseHandler);
+            // Enable auto chain by default
+            mBosswaveClient.overrideAutoChainTo(true);
         } catch (IOException e) {
             e.printStackTrace();
             return false;
@@ -63,6 +73,6 @@ public class BosswaveInitTask extends AsyncTask<Void, Void, Boolean> {
 
     @Override
     protected void onPostExecute(Boolean success) {
-        mTaskListener.onResponse(success);
+        mTaskListener.onResponse(success, mBosswaveClient);
     }
 }
