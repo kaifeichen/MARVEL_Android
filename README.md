@@ -16,14 +16,7 @@ Please refer to the README.md in https://github.com/SoftwareDefinedBuildings/Cel
   git clone https://github.com/SoftwareDefinedBuildings/CellMate_Android
   ```
 
-3. Run the `download.sh` in this repository to download OpenCV libraries
-
-  ```
-  cd ~/workspace/CellMate_Android
-  ./download.sh
-  ```
-
-4. You can import this project in Android Studio now.
+3. Import this project in Android Studio.
 
 
 ## Citation

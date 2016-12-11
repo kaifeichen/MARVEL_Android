@@ -2,19 +2,27 @@ apply plugin: 'com.android.application'
 
 android {
     compileSdkVersion 21
-    buildToolsVersion "23.0.3"
+    buildToolsVersion "25.0.1"
     defaultConfig {
         applicationId 'edu.berkeley.cs.sdb.cellmate'
         minSdkVersion 21
-        targetSdkVersion 21
+        targetSdkVersion 23
         versionCode 1
-        versionName "1.0"
+        versionName "0.1"
+        jackOptions {
+            enabled true
+        }
     }
     buildTypes {
+        debug {
+            versionNameSuffix ".debug"
+            minifyEnabled false
+            shrinkResources false
+        }
         release {
             debuggable true
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            shrinkResources true
         }
     }
     productFlavors {
@@ -24,12 +32,23 @@ android {
             jni.srcDirs = []
         }
     }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+repositories {
+    maven { url "https://jitpack.io" }
+    maven { url "https://mint.splunk.com/gradle/" }
 }
 
 dependencies {
     compile fileTree(include: ['*.jar'], dir: 'libs')
     compile 'com.android.support:appcompat-v7:21.0+'
-    compile 'com.squareup.okhttp3:okhttp:3.2.0'
-    compile 'org.msgpack:msgpack-core:0.8.3'
-    compile project(':openCVLibrary310')
+    compile 'org.msgpack:msgpack-core:0.8.11'
+    compile 'com.squareup.okhttp3:okhttp:3.5.0'
+    compile 'com.github.SoftwareDefinedBuildings:bw2android:v0.1'
+    compile 'com.github.kaifeichen:OpenCV-Android:v3.1.0'
+    compile 'com.splunk.mint:mint:4.3.0'
 }
