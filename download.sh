@@ -1,9 +1,9 @@
 mkdir -p downloads
 cd downloads
 
-wget -nc https://www.cs.berkeley.edu/~kaifei/download/bw2android-0.1-all.jar -P ../app/libs --no-check-certificate
+wget -c https://github.com/SoftwareDefinedBuildings/bw2android/releases/download/v0.1/bw2android-0.1-all.jar -P ../app/libs --no-check-certificate
 
-wget -nc https://github.com/opencv/opencv/releases/download/3.1.0/OpenCV-3.1.0-android-sdk.zip --no-check-certificate
+wget -c https://github.com/opencv/opencv/releases/download/3.1.0/OpenCV-3.1.0-android-sdk.zip --no-check-certificate
 if [ ! -d OpenCV-android-sdk ]; then
     unzip OpenCV-3.1.0-android-sdk.zip
 fi
