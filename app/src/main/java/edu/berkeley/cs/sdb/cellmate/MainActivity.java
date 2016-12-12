@@ -20,6 +20,7 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.Image;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -179,18 +180,14 @@ public class MainActivity extends ActionBarActivity {
     };
 
     private class BWPublishImageRunnable implements Runnable {
-        private final byte[] mImageData;
-        private final int mWidth;
-        private final int mHeight;
+        private final Image mImage;
         private final double mFx;
         private final double mFy;
         private final double mCx;
         private final double mCy;
 
-        public BWPublishImageRunnable(byte[] imageData, int width, int height, double fx, double fy, double cx, double cy) {
-            mImageData = imageData;
-            mWidth = width;
-            mHeight = height;
+        public BWPublishImageRunnable(Image image, double fx, double fy, double cx, double cy) {
+            mImage = image;
             mFx = fx;
             mFy = fy;
             mCx = cx;
@@ -202,25 +199,22 @@ public class MainActivity extends ActionBarActivity {
             try {
                 String topic = "scratch.ns/cellmate";
                 System.out.println(topic);
-                new BosswavePublishImageTask(mBosswaveClient, topic, mImageData, mWidth, mHeight, mFx, mFy, mCx, mCy, mBwPubImaTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new BwPubImgTask(mBosswaveClient, topic, mImage, mFx, mFy, mCx, mCy, mBwPubImaTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     }
+
     private class HttpPostImageRunnable implements Runnable {
-        private final byte[] mImageData;
-        private final int mWidth;
-        private final int mHeight;
+        private final Image mImage;
         private final double mFx;
         private final double mFy;
         private final double mCx;
         private final double mCy;
 
-        public HttpPostImageRunnable(byte[] imageData, int width, int height, double fx, double fy, double cx, double cy) {
-            mImageData = imageData;
-            mWidth = width;
-            mHeight = height;
+        public HttpPostImageRunnable(Image image, double fx, double fy, double cx, double cy) {
+            mImage = image;
             mFx = fx;
             mFy = fy;
             mCx = cx;
@@ -234,7 +228,7 @@ public class MainActivity extends ActionBarActivity {
                 String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
                 String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
                 String imagePostUrl = "http://" + cellmateServerAddr + ":" + cellmateServerPort + "/";
-                new HttpPostImageTask(mHttpClient, imagePostUrl, mImageData, mWidth, mHeight, mFx, mFy, mCx, mCy, mRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new HttpPostImgTask(mHttpClient, imagePostUrl, mImage, mFx, mFy, mCx, mCy, mRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -243,16 +237,18 @@ public class MainActivity extends ActionBarActivity {
 
     private final AutoFitImageReader.OnImageAvailableListener mOnImageAvailableListener = new AutoFitImageReader.OnImageAvailableListener() {
         @Override
-        public void onImageAvailable(byte[] imageData, int width, int height, double fx, double fy, double cx, double cy) {
-            // AsyncTask task instance must be created and executed on the UI thread
+        public void onImageAvailable(Image image, double fx, double fy, double cx, double cy) {
             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-            String mode = preferences.getString("mode_list", "HTTP");
-            if(mode.equals("HTTP")) {
-                runOnUiThread(new HttpPostImageRunnable(imageData, width, height, fx, fy, cx, cy));
-            } else if(mode.equals("BOSSWAVE")){
-                runOnUiThread(new BWPublishImageRunnable(imageData, width, height, fx, fy, cx, cy));
+            String connType = preferences.getString(getString(R.string.conn_type_key), getString(R.string.conn_type_val));
+            String[] connTypes = getResources().getStringArray(R.array.conn_types);
+            if (connType.equals(connTypes[0])) { // HTTP
+                // AsyncTask task instance must be created and executed on the UI thread
+                runOnUiThread(new HttpPostImageRunnable(image, fx, fy, cx, cy));
+            } else if (connType.equals(connTypes[1])) { // BOSSWAVE
+                runOnUiThread(new BWPublishImageRunnable(image, fx, fy, cx, cy));
             } else {
-                showToast(mode, Toast.LENGTH_LONG);
+                image.close();
+                throw new RuntimeException("Connection Type is Undefined");
             }
         }
     };
@@ -289,7 +285,7 @@ public class MainActivity extends ActionBarActivity {
                     || key.equals(getString(R.string.bosswave_router_port_key))
                     || key.equals(getString(R.string.bosswave_key_base64_key))) {
                 if (mIsBosswaveConnected) {
-                    new BosswaveCloseTask(mBosswaveClient, mBwCloseTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                    new BwCloseTask(mBosswaveClient, mBwCloseTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
                 } else {
                     initBosswaveClient();
                 }
@@ -301,7 +297,7 @@ public class MainActivity extends ActionBarActivity {
             if (mIsBosswaveConnected) {
                 setButtonsEnabled(false, false, false);
                 String topic = CONTROL_TOPIC_PREFIX + Integer.toString(deviceNameToid(mTarget)) + CONTROL_TOPIC_SUFFIX;
-                new BosswavePublishTask(mBosswaveClient, topic, new byte[]{1}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new BwPubCmdTask(mBosswaveClient, topic, new byte[]{1}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } else {
                 showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
             }
@@ -313,7 +309,7 @@ public class MainActivity extends ActionBarActivity {
             if (mIsBosswaveConnected) {
                 setButtonsEnabled(false, false, false);
                 String topic = CONTROL_TOPIC_PREFIX + Integer.toString(deviceNameToid(mTarget)) + CONTROL_TOPIC_SUFFIX;
-                new BosswavePublishTask(mBosswaveClient, topic, new byte[]{0}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new BwPubCmdTask(mBosswaveClient, topic, new byte[]{0}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } else {
                 showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
             }
@@ -331,7 +327,7 @@ public class MainActivity extends ActionBarActivity {
         }
     };
 
-    private HttpPostImageTask.Listener mRecognitionListener = new HttpPostImageTask.Listener() {
+    private HttpPostImgTask.Listener mRecognitionListener = new HttpPostImgTask.Listener() {
         @Override
         public void onResponse(String result) { // null means network error
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
@@ -355,7 +351,7 @@ public class MainActivity extends ActionBarActivity {
     };
 
 
-    private BosswaveInitTask.Listener mBwInitTaskListener = new BosswaveInitTask.Listener() {
+    private BwInitTask.Listener mBwInitTaskListener = new BwInitTask.Listener() {
         @Override
         public void onResponse(boolean success, BosswaveClient client) {
             if (success) {
@@ -372,7 +368,7 @@ public class MainActivity extends ActionBarActivity {
         }
     };
 
-    private BosswaveCloseTask.Listener mBwCloseTaskListener = new BosswaveCloseTask.Listener() {
+    private BwCloseTask.Listener mBwCloseTaskListener = new BwCloseTask.Listener() {
         @Override
         public void onResponse(boolean success) {
             if (success) {
@@ -386,7 +382,7 @@ public class MainActivity extends ActionBarActivity {
         }
     };
 
-    private BosswavePublishImageTask.Listener mBwPubImaTaskListener = new BosswavePublishImageTask.Listener() {
+    private BwPubImgTask.Listener mBwPubImaTaskListener = new BwPubImgTask.Listener() {
         @Override
         public void onResponse(String response) {
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
@@ -409,7 +405,7 @@ public class MainActivity extends ActionBarActivity {
         }
     };
 
-    private BosswavePublishTask.Listener mBwPubTaskListener = new BosswavePublishTask.Listener() {
+    private BwPubCmdTask.Listener mBwPubTaskListener = new BwPubCmdTask.Listener() {
         @Override
         public void onResponse(String response) {
             showToast("Control command sent: " + response, Toast.LENGTH_SHORT);
@@ -516,7 +512,7 @@ public class MainActivity extends ActionBarActivity {
                 tempKeyFile.deleteOnExit();
                 FileOutputStream fos = new FileOutputStream(tempKeyFile);
                 fos.write(mKey);
-                new BosswaveInitTask(tempKeyFile, mBwInitTaskListener,bosswaveRouterAddr,bosswaveRouterPort).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new BwInitTask(tempKeyFile, mBwInitTaskListener, bosswaveRouterAddr, bosswaveRouterPort).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (IOException e) {
                 e.printStackTrace();
             }

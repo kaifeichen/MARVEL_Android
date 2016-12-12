@@ -11,7 +11,7 @@ import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
 import edu.berkeley.cs.sdb.bosswave.BosswaveResponse;
 import edu.berkeley.cs.sdb.bosswave.ResponseHandler;
 
-public class BosswaveInitTask extends AsyncTask<Void, Void, Boolean> {
+public class BwInitTask extends AsyncTask<Void, Void, Boolean> {
     private BosswaveClient mBosswaveClient;
     private File mKeyFile;
     private Listener mTaskListener;
@@ -24,7 +24,7 @@ public class BosswaveInitTask extends AsyncTask<Void, Void, Boolean> {
         void onResponse(boolean success, BosswaveClient client);
     }
 
-    public BosswaveInitTask(File keyFile, Listener listener, String bosswaveRouterAddr, int bosswaveRouterPort) {
+    public BwInitTask(File keyFile, Listener listener, String bosswaveRouterAddr, int bosswaveRouterPort) {
         mKeyFile = keyFile;
         mTaskListener = listener;
         mSem = new Semaphore(0);
