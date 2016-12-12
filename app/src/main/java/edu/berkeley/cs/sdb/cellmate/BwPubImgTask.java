@@ -19,7 +19,7 @@ import edu.berkeley.cs.sdb.bosswave.ResultHandler;
 import edu.berkeley.cs.sdb.bosswave.SubscribeRequest;
 
 
-public class BosswavePublishImageTask extends AsyncTask<Void, Void, String> {
+public class BwPubImgTask extends AsyncTask<Void, Void, String> {
     private BosswaveClient mBosswaveClient;
     private String mTopic;
     private Image mImage;
@@ -36,7 +36,7 @@ public class BosswavePublishImageTask extends AsyncTask<Void, Void, String> {
         void onResponse(String response);
     }
 
-    public BosswavePublishImageTask(BosswaveClient bosswaveClient, String topic, Image image, double fx, double fy, double cx, double cy, Listener listener) {
+    public BwPubImgTask(BosswaveClient bosswaveClient, String topic, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mBosswaveClient = bosswaveClient;
         mTopic = topic;
         mImage = image;
@@ -91,7 +91,7 @@ public class BosswavePublishImageTask extends AsyncTask<Void, Void, String> {
             builder.clearPayloadObjects();
             PayloadObject poHeader = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), header.getBytes());
             PayloadObject poIdentity = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), identity.getBytes());
-            PayloadObject poData = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Imgcodecs.compressJPEG(mImage));
+            PayloadObject poData = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), ImgCodec.compressJPEG(mImage));
             PayloadObject poWidth = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Integer.toString(mImage.getWidth()).getBytes());
             PayloadObject poHeight = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Integer.toString(mImage.getHeight()).getBytes());
             // TODO: use binary format, do not transfer human-readable strings...

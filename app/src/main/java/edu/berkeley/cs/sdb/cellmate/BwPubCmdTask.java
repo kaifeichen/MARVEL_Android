@@ -12,7 +12,7 @@ import edu.berkeley.cs.sdb.bosswave.PublishRequest;
 import edu.berkeley.cs.sdb.bosswave.BosswaveResponse;
 import edu.berkeley.cs.sdb.bosswave.ResponseHandler;
 
-public class BosswavePublishTask extends AsyncTask<Void, Void, String> {
+public class BwPubCmdTask extends AsyncTask<Void, Void, String> {
     private BosswaveClient mBosswaveClient;
     private String mTopic;
     private byte[] mData;
@@ -25,7 +25,7 @@ public class BosswavePublishTask extends AsyncTask<Void, Void, String> {
         void onResponse(String response);
     }
 
-    public BosswavePublishTask(BosswaveClient bosswaveClient, String topic, byte[] data, PayloadObject.Type type, Listener listener) {
+    public BwPubCmdTask(BosswaveClient bosswaveClient, String topic, byte[] data, PayloadObject.Type type, Listener listener) {
         mBosswaveClient = bosswaveClient;
         mTopic = topic;
         mData = data;

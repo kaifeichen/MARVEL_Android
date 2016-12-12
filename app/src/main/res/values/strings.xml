@@ -6,13 +6,16 @@
     <string name="off">Off</string>
     <string name="none">None</string>
     <string name="settings">Settings</string>
-    
+
+    <string name="conn_type_key">conn_type_key</string>
+    <string name="conn_type_title">Connection Type</string>
+    <string name="conn_type_val">HTTP</string>
     <string name="cellmate_server_addr_key">cellmate_server_addr</string>
     <string name="cellmate_server_addr_title">CellMate Server Address</string>
     <string name="cellmate_server_addr_val">castle.cs.berkeley.edu</string>
     <string name="cellmate_server_port_key">cellmate_server_port</string>
     <string name="cellmate_server_port_title">CellMate Server Port</string>
-    <string name="cellmate_server_port_val">50021</string>
+    <string name="cellmate_server_port_val">50006</string>
     <string name="bosswave_router_addr_key">bosswave_router_addr</string>
     <string name="bosswave_router_addr_title">BOSSWAVE Router Address</string>
     <string name="bosswave_router_addr_val">castle.cs.berkeley.edu</string>
@@ -40,8 +43,4 @@
     <string name="camera_cy_key">camera_cy</string>
     <string name="camera_cy_title">Camera cy (pixel)</string>
     <string name="camera_cy_val">0.0</string>
-    <string name="flip_x_key">flip_x</string>
-    <string name="flip_x_title">Flip along x axis</string>
-    <string name="flip_x_summary">Some cameras generate flipped images</string>
-    <string name="flip_x_value">true</string>
 </resources>

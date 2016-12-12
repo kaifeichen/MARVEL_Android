@@ -6,7 +6,7 @@ import java.io.IOException;
 
 import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
 
-public class BosswaveCloseTask extends AsyncTask<Void, Void, Boolean> {
+public class BwCloseTask extends AsyncTask<Void, Void, Boolean> {
     private BosswaveClient mBosswaveClient;
     private Listener mTaskListener;
 
@@ -14,7 +14,7 @@ public class BosswaveCloseTask extends AsyncTask<Void, Void, Boolean> {
         void onResponse(boolean success);
     }
 
-    public BosswaveCloseTask(BosswaveClient bosswaveClient, Listener listener) {
+    public BwCloseTask(BosswaveClient bosswaveClient, Listener listener) {
         mBosswaveClient = bosswaveClient;
         mTaskListener = listener;
     }

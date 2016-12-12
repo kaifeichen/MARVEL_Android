@@ -15,7 +15,7 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-public class HttpPostImageTask extends AsyncTask<Void, Void, String> {
+public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     private static final String LOG_TAG = "cellmate";
 
     private OkHttpClient mHttpClient;
@@ -31,7 +31,7 @@ public class HttpPostImageTask extends AsyncTask<Void, Void, String> {
         void onResponse(String result); // null means network error
     }
 
-    public HttpPostImageTask(OkHttpClient httpClient, String url, Image image, double fx, double fy, double cx, double cy, Listener listener) {
+    public HttpPostImgTask(OkHttpClient httpClient, String url, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mHttpClient = httpClient;
         mUrl = url;
         mImage = image;
@@ -47,7 +47,7 @@ public class HttpPostImageTask extends AsyncTask<Void, Void, String> {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         RequestBody requestBody = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("file", timeStamp, RequestBody.create(MediaType.parse("application/octet-stream"), Imgcodecs.compressJPEG(mImage)))
+                .addFormDataPart("file", timeStamp, RequestBody.create(MediaType.parse("application/octet-stream"), ImgCodec.compressJPEG(mImage)))
                 .addFormDataPart("fx", Double.toString(mFx))
                 .addFormDataPart("fy", Double.toString(mFy))
                 .addFormDataPart("cx", Double.toString(mCx))

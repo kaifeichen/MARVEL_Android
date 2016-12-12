@@ -8,7 +8,7 @@ import android.media.Image;
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 
-public class Imgcodecs {
+public class ImgCodec {
     public static byte[] compressJPEG(Image image) {
         if (image.getFormat() != ImageFormat.YUV_420_888) {
             return null;
