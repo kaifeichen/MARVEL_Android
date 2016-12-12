@@ -20,6 +20,7 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.media.Image;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -179,18 +180,14 @@ public class MainActivity extends ActionBarActivity {
     };
 
     private class BWPublishImageRunnable implements Runnable {
-        private final byte[] mImageData;
-        private final int mWidth;
-        private final int mHeight;
+        private final Image mImage;
         private final double mFx;
         private final double mFy;
         private final double mCx;
         private final double mCy;
 
-        public BWPublishImageRunnable(byte[] imageData, int width, int height, double fx, double fy, double cx, double cy) {
-            mImageData = imageData;
-            mWidth = width;
-            mHeight = height;
+        public BWPublishImageRunnable(Image image, double fx, double fy, double cx, double cy) {
+            mImage = image;
             mFx = fx;
             mFy = fy;
             mCx = cx;
@@ -202,25 +199,22 @@ public class MainActivity extends ActionBarActivity {
             try {
                 String topic = "scratch.ns/cellmate";
                 System.out.println(topic);
-                new BosswavePublishImageTask(mBosswaveClient, topic, mImageData, mWidth, mHeight, mFx, mFy, mCx, mCy, mBwPubImaTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new BosswavePublishImageTask(mBosswaveClient, topic, mImage, mFx, mFy, mCx, mCy, mBwPubImaTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
     }
+
     private class HttpPostImageRunnable implements Runnable {
-        private final byte[] mImageData;
-        private final int mWidth;
-        private final int mHeight;
+        private final Image mImage;
         private final double mFx;
         private final double mFy;
         private final double mCx;
         private final double mCy;
 
-        public HttpPostImageRunnable(byte[] imageData, int width, int height, double fx, double fy, double cx, double cy) {
-            mImageData = imageData;
-            mWidth = width;
-            mHeight = height;
+        public HttpPostImageRunnable(Image image, double fx, double fy, double cx, double cy) {
+            mImage = image;
             mFx = fx;
             mFy = fy;
             mCx = cx;
@@ -234,7 +228,7 @@ public class MainActivity extends ActionBarActivity {
                 String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
                 String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
                 String imagePostUrl = "http://" + cellmateServerAddr + ":" + cellmateServerPort + "/";
-                new HttpPostImageTask(mHttpClient, imagePostUrl, mImageData, mWidth, mHeight, mFx, mFy, mCx, mCy, mRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new HttpPostImageTask(mHttpClient, imagePostUrl, mImage, mFx, mFy, mCx, mCy, mRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -243,15 +237,17 @@ public class MainActivity extends ActionBarActivity {
 
     private final AutoFitImageReader.OnImageAvailableListener mOnImageAvailableListener = new AutoFitImageReader.OnImageAvailableListener() {
         @Override
-        public void onImageAvailable(byte[] imageData, int width, int height, double fx, double fy, double cx, double cy) {
-            // AsyncTask task instance must be created and executed on the UI thread
+        public void onImageAvailable(Image image, double fx, double fy, double cx, double cy) {
             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+            // TODO: don't use hard-coded string here
             String mode = preferences.getString("mode_list", "HTTP");
-            if(mode.equals("HTTP")) {
-                runOnUiThread(new HttpPostImageRunnable(imageData, width, height, fx, fy, cx, cy));
-            } else if(mode.equals("BOSSWAVE")){
-                runOnUiThread(new BWPublishImageRunnable(imageData, width, height, fx, fy, cx, cy));
+            if (mode.equals("HTTP")) {
+                // AsyncTask task instance must be created and executed on the UI thread
+                runOnUiThread(new HttpPostImageRunnable(image, fx, fy, cx, cy));
+            } else if (mode.equals("BOSSWAVE")) {
+                runOnUiThread(new BWPublishImageRunnable(image, fx, fy, cx, cy));
             } else {
+                image.close();
                 showToast(mode, Toast.LENGTH_LONG);
             }
         }
@@ -516,7 +512,7 @@ public class MainActivity extends ActionBarActivity {
                 tempKeyFile.deleteOnExit();
                 FileOutputStream fos = new FileOutputStream(tempKeyFile);
                 fos.write(mKey);
-                new BosswaveInitTask(tempKeyFile, mBwInitTaskListener,bosswaveRouterAddr,bosswaveRouterPort).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new BosswaveInitTask(tempKeyFile, mBwInitTaskListener, bosswaveRouterAddr, bosswaveRouterPort).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (IOException e) {
                 e.printStackTrace();
             }

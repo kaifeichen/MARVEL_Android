@@ -1,12 +1,8 @@
 package edu.berkeley.cs.sdb.cellmate;
 
+import android.media.Image;
 import android.os.AsyncTask;
 import android.util.Log;
-
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfByte;
-import org.opencv.imgcodecs.Imgcodecs;
 
 import java.io.IOException;
 import java.text.SimpleDateFormat;
@@ -24,29 +20,21 @@ public class HttpPostImageTask extends AsyncTask<Void, Void, String> {
 
     private OkHttpClient mHttpClient;
     private String mUrl;
-    private byte[] mImageData;
-    private int mWidth;
-    private int mHeight;
+    private Image mImage;
     private double mFx;
     private double mFy;
     private double mCx;
     private double mCy;
     private Listener mListener;
 
-    static {
-        System.loadLibrary("opencv_java3");
-    }
-
     public interface Listener {
         void onResponse(String result); // null means network error
     }
 
-    public HttpPostImageTask(OkHttpClient httpClient, String url, byte[] imageData, int width, int height, double fx, double fy, double cx, double cy, Listener listener) {
+    public HttpPostImageTask(OkHttpClient httpClient, String url, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mHttpClient = httpClient;
         mUrl = url;
-        mImageData = imageData;
-        mWidth = width;
-        mHeight = height;
+        mImage = image;
         mFx = fx;
         mFy = fy;
         mCx = cx;
@@ -54,22 +42,12 @@ public class HttpPostImageTask extends AsyncTask<Void, Void, String> {
         mListener = listener;
     }
 
-    static byte[] compressJPEG(byte[] imageData, int width, int height) {
-        Mat image = new Mat(height, width, CvType.CV_8UC1);
-        image.put(0, 0, imageData);
-
-        MatOfByte jpgMat = new MatOfByte();
-        Imgcodecs.imencode(".jpg", image, jpgMat);
-        image.release();
-        return jpgMat.toArray();
-    }
-
     @Override
     protected String doInBackground(Void... voids) {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         RequestBody requestBody = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("file", timeStamp, RequestBody.create(MediaType.parse("application/octet-stream"), compressJPEG(mImageData, mWidth, mHeight)))
+                .addFormDataPart("file", timeStamp, RequestBody.create(MediaType.parse("application/octet-stream"), Imgcodecs.compressJPEG(mImage)))
                 .addFormDataPart("fx", Double.toString(mFx))
                 .addFormDataPart("fy", Double.toString(mFy))
                 .addFormDataPart("cx", Double.toString(mCx))
@@ -97,6 +75,7 @@ public class HttpPostImageTask extends AsyncTask<Void, Void, String> {
 
     @Override
     protected void onPostExecute(String result) {
+        mImage.close();
         mListener.onResponse(result);
     }
 }

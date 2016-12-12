@@ -3,7 +3,6 @@ package edu.berkeley.cs.sdb.cellmate;
 import android.app.Activity;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.ImageFormat;
 import android.graphics.Rect;
 import android.hardware.camera2.CameraCharacteristics;
 import android.media.Image;
@@ -12,7 +11,6 @@ import android.os.Handler;
 import android.preference.PreferenceManager;
 import android.view.Surface;
 
-import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class AutoFitImageReader implements AutoCloseable {
@@ -28,10 +26,9 @@ public class AutoFitImageReader implements AutoCloseable {
     private double mCameraFy;
     private double mCameraCx;
     private double mCameraCy;
-    private boolean mFlipX;
 
     public interface OnImageAvailableListener {
-        void onImageAvailable(byte[] imageData, int width, int height, double fx, double fy, double cx, double cy);
+        void onImageAvailable(Image image, double fx, double fy, double cx, double cy);
     }
 
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
@@ -58,34 +55,19 @@ public class AutoFitImageReader implements AutoCloseable {
                 double aspectRatioCam = (double) mCameraWidth / mCameraHeight;
                 double aspectRatioImg = (double) width / height;
                 if (aspectRatioCam != aspectRatioImg) { // aspect ratio has to be the same
-                    image.close();
-                    return;
+                    throw new RuntimeException("Image and Camera Aspect Ratios Are Not the Same");
                 }
 
-                byte[] imageData = imageToBytes(image);
-                image.close();
-
-                if (isBlurred(imageData, width, height)) {
-                    mCaptureRequest.set(true);
-                    return;
-                }
-
-                if (mFlipX) {
-                    // image from camera is flipped along x-axis
-                    imageData = flipVertical(imageData, width, height);
-                }
-
-                imageData = rotate(imageData, width, height);
-
+                // TODO: predict intrinsics on the server side
                 double scale = (double) width / (double) mCameraWidth;
                 double fx = mCameraFx * scale;
                 double fy = mCameraFy * scale;
                 double cx = mCameraCx * scale;
                 double cy = mCameraCy * scale;
                 if (getRotateCount() % 2 == 0) {
-                    mListener.onImageAvailable(imageData, width, height, fx, fy, cx, cy);
+                    mListener.onImageAvailable(image, fx, fy, cx, cy);
                 } else {
-                    mListener.onImageAvailable(imageData, height, width, fy, fx, cy, cx);
+                    mListener.onImageAvailable(image, fy, fx, cy, cx);
                 }
             } else {
                 image.close();
@@ -138,7 +120,6 @@ public class AutoFitImageReader implements AutoCloseable {
         mCameraFy = Double.parseDouble(preferences.getString(mContext.getString(R.string.camera_fy_key), mContext.getString(R.string.camera_fy_val)));
         mCameraCx = Double.parseDouble(preferences.getString(mContext.getString(R.string.camera_cx_key), mContext.getString(R.string.camera_cx_val)));
         mCameraCy = Double.parseDouble(preferences.getString(mContext.getString(R.string.camera_cy_key), mContext.getString(R.string.camera_cy_val)));
-        mFlipX = preferences.getBoolean(mContext.getString(R.string.flip_x_key), Boolean.parseBoolean(mContext.getString(R.string.flip_x_value)));
         if (mCameraWidth == Integer.parseInt(mContext.getString(R.string.camera_width_val))
                 || mCameraHeight == Integer.parseInt(mContext.getString(R.string.camera_height_val))
                 || mCameraFx == Double.parseDouble(mContext.getString(R.string.camera_fx_val))
@@ -168,102 +149,5 @@ public class AutoFitImageReader implements AutoCloseable {
         } else {
             return sensorRotation - userRotation;
         }
-    }
-
-    /**
-     * Takes an Android Image in the YUV_420_888 format and returns a byte array.
-     * ref: http://stackoverflow.com/questions/30510928/convert-android-camera2-api-yuv-420-888-to-rgb
-     *
-     * @param image Image in the YUV_420_888 format
-     * @return bytes that contains the image data in greyscale
-     */
-    private byte[] imageToBytes(Image image) {
-        if (image.getFormat() != ImageFormat.YUV_420_888) {
-            return null;
-        }
-
-        int bytesPerPixel = ImageFormat.getBitsPerPixel(ImageFormat.YUV_420_888) / 8;
-        Image.Plane yPlane = image.getPlanes()[0]; // we only need a gray picture
-        int pixelStride = yPlane.getPixelStride();
-        if (bytesPerPixel != 1 || pixelStride != 1) { // they are guaranteed to be both 1 in Y plane
-            throw new RuntimeException("Wrong image format");
-        }
-
-        ByteBuffer buffer = yPlane.getBuffer();
-        int width = image.getWidth();
-        int height = image.getHeight();
-        byte[] data = new byte[width * height];
-        buffer.get(data);
-
-        return data;
-    }
-
-    private boolean isBlurred(byte[] image, int width, int height) {
-        return false;
-    }
-
-    /**
-     * Flip the image vertically
-     *
-     * @param imageData the raw bytes of a greyscale image, every byte is a color sample
-     * @return the raw bytes of the image, flipped vertically
-     */
-    private byte[] flipVertical(byte[] imageData, int width, int height) {
-        byte[] flipped = new byte[imageData.length];
-        for (int i = 0; i < height; i++) {
-            System.arraycopy(imageData, width * i, flipped, width * (height - 1 - i), width);
-        }
-        return flipped;
-    }
-
-    /**
-     * Rotate image to the user-inspecting orientation
-     *
-     * @param imageData the raw bytes of a greyscale image, every byte is a color sample
-     * @return the raw bytes of the rotated image, every byte is a color sample
-     */
-    private byte[] rotate(byte[] imageData, int width, int height) {
-        switch (getRotateCount()) {
-            case 1:
-                imageData = rotate90(imageData, width, height);
-                break;
-            case 2:
-                imageData = rotate180(imageData, width, height);
-                break;
-            case 3:
-                imageData = rotate270(imageData, width, height);
-                break;
-        }
-        return imageData;
-    }
-
-    private byte[] rotate90(byte[] imageData, int width, int height) {
-        byte[] rotated = new byte[imageData.length];
-        for (int i = 0; i < height; i++) {
-            for (int j = 0; j < width; j++) {
-                rotated[height * j + (height - 1 - i)] = imageData[width * i + j];
-            }
-        }
-        return rotated;
-    }
-
-    private byte[] rotate180(byte[] imageData, int width, int height) {
-        byte[] rotated = new byte[imageData.length];
-        for (int i = 0; i < height; i++) {
-            for (int j = 0; j < width; j++) {
-                rotated[width * (height - 1 - i) + (width - 1 - j)] = imageData[width * i + j];
-            }
-        }
-        return rotated;
-    }
-
-    private byte[] rotate270(byte[] imageData, int width, int height) {
-        byte[] rotated = new byte[imageData.length];
-        for (int i = 0; i < height; i++) {
-            for (int j = 0; j < width; j++) {
-                rotated[height * (width - 1 - j) + i] = imageData[width * i + j];
-            }
-        }
-        return rotated;
     }
 }

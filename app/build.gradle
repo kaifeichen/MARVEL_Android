@@ -6,23 +6,11 @@ android {
     defaultConfig {
         applicationId 'edu.berkeley.cs.sdb.cellmate'
         minSdkVersion 21
-        targetSdkVersion 23
+        targetSdkVersion 21
         versionCode 1
         versionName "0.1"
         jackOptions {
             enabled true
-        }
-    }
-    buildTypes {
-        debug {
-            versionNameSuffix ".debug"
-            minifyEnabled false
-            shrinkResources false
-        }
-        release {
-            debuggable true
-            minifyEnabled false
-            shrinkResources true
         }
     }
     productFlavors {
@@ -49,6 +37,5 @@ dependencies {
     compile 'org.msgpack:msgpack-core:0.8.11'
     compile 'com.squareup.okhttp3:okhttp:3.5.0'
     compile 'com.github.SoftwareDefinedBuildings:bw2android:v0.1'
-    compile 'com.github.kaifeichen:OpenCV-Android:v3.1.0'
     compile 'com.splunk.mint:mint:4.3.0'
 }

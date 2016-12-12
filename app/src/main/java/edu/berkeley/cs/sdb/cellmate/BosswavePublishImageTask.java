@@ -1,11 +1,7 @@
 package edu.berkeley.cs.sdb.cellmate;
 
+import android.media.Image;
 import android.os.AsyncTask;
-
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfByte;
-import org.opencv.imgcodecs.Imgcodecs;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -13,11 +9,11 @@ import java.util.UUID;
 import java.util.concurrent.Semaphore;
 
 import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
+import edu.berkeley.cs.sdb.bosswave.BosswaveResponse;
 import edu.berkeley.cs.sdb.bosswave.BosswaveResult;
 import edu.berkeley.cs.sdb.bosswave.ChainElaborationLevel;
 import edu.berkeley.cs.sdb.bosswave.PayloadObject;
 import edu.berkeley.cs.sdb.bosswave.PublishRequest;
-import edu.berkeley.cs.sdb.bosswave.BosswaveResponse;
 import edu.berkeley.cs.sdb.bosswave.ResponseHandler;
 import edu.berkeley.cs.sdb.bosswave.ResultHandler;
 import edu.berkeley.cs.sdb.bosswave.SubscribeRequest;
@@ -26,7 +22,7 @@ import edu.berkeley.cs.sdb.bosswave.SubscribeRequest;
 public class BosswavePublishImageTask extends AsyncTask<Void, Void, String> {
     private BosswaveClient mBosswaveClient;
     private String mTopic;
-    private byte[] mData;
+    private Image mImage;
     private PayloadObject.Type mType;
     private Listener mTaskListener;
     private Semaphore mSem;
@@ -35,35 +31,15 @@ public class BosswavePublishImageTask extends AsyncTask<Void, Void, String> {
     private double mFy;
     private double mCx;
     private double mCy;
-    private int mWidth;
-    private int mHeight;
 
     public interface Listener {
         void onResponse(String response);
     }
 
-    static {
-        System.loadLibrary("opencv_java3");
-    }
-
-    static byte[] compressJPEG(byte[] imageData, int width, int height) {
-        Mat image = new Mat(height, width, CvType.CV_8UC1);
-        image.put(0, 0, imageData);
-
-        MatOfByte jpgMat = new MatOfByte();
-        Imgcodecs.imencode(".jpg", image, jpgMat);
-        image.release();
-        return jpgMat.toArray();
-    }
-
-
-
-    public BosswavePublishImageTask(BosswaveClient bosswaveClient, String topic, byte[] data, int widht, int height, double fx, double fy, double cx, double cy, Listener listener) {
+    public BosswavePublishImageTask(BosswaveClient bosswaveClient, String topic, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mBosswaveClient = bosswaveClient;
         mTopic = topic;
-        mData = data;
-        mWidth = widht;
-        mHeight = height;
+        mImage = image;
         mFx = fx;
         mFy = fy;
         mCx = cx;
@@ -89,9 +65,6 @@ public class BosswavePublishImageTask extends AsyncTask<Void, Void, String> {
         }
     }
 
-
-
-
     private class TextResultHandler implements ResultHandler {
         @Override
         public void onResultReceived(BosswaveResult rslt) {
@@ -107,9 +80,9 @@ public class BosswavePublishImageTask extends AsyncTask<Void, Void, String> {
     protected String doInBackground(Void... voids) {
         try {
             String header = "Cellmate Image";
-            String identity = UUID.randomUUID().toString().substring(0,10);
+            String identity = UUID.randomUUID().toString().substring(0, 10);
             // Subscribe to a Bosswave URI
-            SubscribeRequest.Builder subsbuilder = new SubscribeRequest.Builder(mTopic+"/"+identity);
+            SubscribeRequest.Builder subsbuilder = new SubscribeRequest.Builder(mTopic + "/" + identity);
             SubscribeRequest subsRequest = subsbuilder.build();
             mBosswaveClient.subscribe(subsRequest, new ResponseErrorHandler(), new TextResultHandler());
             PublishRequest.Builder builder = new PublishRequest.Builder(mTopic);
@@ -117,10 +90,11 @@ public class BosswavePublishImageTask extends AsyncTask<Void, Void, String> {
             builder.setChainElaborationLevel(ChainElaborationLevel.PARTIAL);
             builder.clearPayloadObjects();
             PayloadObject poHeader = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), header.getBytes());
-            PayloadObject poIdentity = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}),identity.getBytes());
-            PayloadObject poData = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), compressJPEG(mData, mWidth, mHeight));
-            PayloadObject poWidth = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Integer.toString(mWidth).getBytes());
-            PayloadObject poHeight = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Integer.toString(mHeight).getBytes());
+            PayloadObject poIdentity = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), identity.getBytes());
+            PayloadObject poData = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Imgcodecs.compressJPEG(mImage));
+            PayloadObject poWidth = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Integer.toString(mImage.getWidth()).getBytes());
+            PayloadObject poHeight = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Integer.toString(mImage.getHeight()).getBytes());
+            // TODO: use binary format, do not transfer human-readable strings...
             PayloadObject poFx = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mFx).getBytes());
             PayloadObject poFy = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mFy).getBytes());
             PayloadObject poCx = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mCx).getBytes());
@@ -151,6 +125,7 @@ public class BosswavePublishImageTask extends AsyncTask<Void, Void, String> {
 
     @Override
     protected void onPostExecute(String response) {
+        mImage.close();
         mTaskListener.onResponse(response);
     }
 }
