@@ -1,12 +1,12 @@
 apply plugin: 'com.android.application'
 
 android {
-    compileSdkVersion 21
-    buildToolsVersion "25.0.1"
+    compileSdkVersion 23
+    buildToolsVersion "25.0.2"
     defaultConfig {
         applicationId 'edu.berkeley.cs.sdb.cellmate'
         minSdkVersion 21
-        targetSdkVersion 21
+        targetSdkVersion 23
         versionCode 1
         versionName "0.1"
         jackOptions {
@@ -33,7 +33,7 @@ repositories {
 
 dependencies {
     compile fileTree(include: ['*.jar'], dir: 'libs')
-    compile 'com.android.support:appcompat-v7:21.0+'
+    compile 'com.android.support:appcompat-v7:23.0+'
     compile 'org.msgpack:msgpack-core:0.8.11'
     compile 'com.squareup.okhttp3:okhttp:3.5.0'
     compile 'com.github.SoftwareDefinedBuildings:bw2android:v0.1'

@@ -94,7 +94,6 @@ public class BwPubImgTask extends AsyncTask<Void, Void, String> {
             PayloadObject poData = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), ImgCodec.compressJPEG(mImage));
             PayloadObject poWidth = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Integer.toString(mImage.getWidth()).getBytes());
             PayloadObject poHeight = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Integer.toString(mImage.getHeight()).getBytes());
-            // TODO: use binary format, do not transfer human-readable strings...
             PayloadObject poFx = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mFx).getBytes());
             PayloadObject poFy = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mFy).getBytes());
             PayloadObject poCx = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mCx).getBytes());
