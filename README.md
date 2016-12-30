@@ -4,8 +4,15 @@
 ## What is CellMate? 
 Please refer to the README.md in https://github.com/SoftwareDefinedBuildings/CellMate_Server
 
+## How to Install CellMate Android Client?
 
-## How to Run CellMate Android Client?
+1. Enable installing applications from unknown sources from the Android phone settings. More details can be found [here](https://developer.android.com/distribute/tools/open-distribution.html).
+
+2. Download the latest apk file from [the CellMate Android releases](https://github.com/SoftwareDefinedBuildings/CellMate_Android/releases).
+
+2. Open the apk file to install.
+
+## How to Work on CellMate Android Client?
 
 1. Download [Android Studio](https://developer.android.com/studio/index.html) and install [Android NDK](https://developer.android.com/ndk/index.html).
 
