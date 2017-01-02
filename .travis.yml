@@ -20,4 +20,5 @@ android:
     - android-23
 
 script:
+  - gradle wrapper
   - ./gradlew assembleDebug
