@@ -3,6 +3,9 @@ language: android
 notifications:
   email: false
 
+jdk:
+  - oraclejdk8
+
 android:
   components:
     # Uncomment the lines below if you want to
@@ -23,6 +26,12 @@ android:
     - extra-google-m2repository
     #- extra-android-m2repository
     #- addon-google_apis-google-19
+
+before_script:
+  - wget https://services.gradle.org/distributions/gradle-2.14.1-bin.zip
+  - unzip gradle-2.14.1-bin.zip
+  - export GRADLE_HOME=$PWD/gradle-2.14.1
+  - export PATH=$GRADLE_HOME/bin:$PATH
 
 script:
   - gradle wrapper
