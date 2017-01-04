@@ -25,4 +25,5 @@ android:
     #- addon-google_apis-google-19
 
 script:
+  - gradle wrapper
   - ./gradlew assembleDebug
