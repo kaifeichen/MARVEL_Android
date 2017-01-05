@@ -6,7 +6,12 @@ notifications:
 jdk:
   - oraclejdk8
 
+env:
+  global:
+    - JAVA_HOME=/usr/lib/jvm/java-8-oracle
+
 sudo: false
+
 addons:
   apt:
     packages:
@@ -28,10 +33,10 @@ android:
     - android-21
       
     # Additional components
-    #- extra-android-support
+    - extra-android-support
     #- extra-google-google_play_services
-    #- extra-google-m2repository
-    #- extra-android-m2repository
+    - extra-google-m2repository
+    - extra-android-m2repository
     #- addon-google_apis-google-19
 
 before_script:
@@ -39,7 +44,6 @@ before_script:
   - unzip gradle-2.14.1-bin.zip
   - export GRADLE_HOME=$PWD/gradle-2.14.1
   - export PATH=$GRADLE_HOME/bin:$PATH
-  - jdk_switcher use oraclejdk8
   - gradle wrapper
 
 script:
