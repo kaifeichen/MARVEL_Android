@@ -39,7 +39,8 @@ before_script:
   - unzip gradle-2.14.1-bin.zip
   - export GRADLE_HOME=$PWD/gradle-2.14.1
   - export PATH=$GRADLE_HOME/bin:$PATH
+  - jdk_switcher use oraclejdk8
+  - gradle wrapper
 
 script:
-  - gradle wrapper
   - ./gradlew assembleDebug
