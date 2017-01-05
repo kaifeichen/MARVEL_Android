@@ -12,12 +12,6 @@ env:
 
 sudo: false
 
-addons:
-  apt:
-    packages:
-      - oracle-java8-installer
-      - oracle-java8-set-default
-
 android:
   components:
     # Uncomment the lines below if you want to
