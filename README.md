@@ -1,5 +1,5 @@
 # CellMate : Visual Appliance Identification and Control in Smart Buildings
-[![Build Status](https://travis-ci.org/SoftwareDefinedBuildings/CellMate_Android.svg?branch=master)](https://travis-ci.org/SoftwareDefinedBuildings/CellMate_Android)
+[![Build Status](https://travis-ci.com/kaifeichen/CellMate_Android.svg?token=XjizLR77Z2rgJhyHZZ73&branch=master)](https://travis-ci.com/kaifeichen/CellMate_Android)
 
 ## What is CellMate? 
 Please refer to the README.md in https://github.com/SoftwareDefinedBuildings/CellMate_Server
