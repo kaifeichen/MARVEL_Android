@@ -2,7 +2,7 @@
 [![Build Status](https://travis-ci.com/kaifeichen/CellMate_Android.svg?token=XjizLR77Z2rgJhyHZZ73&branch=master)](https://travis-ci.com/kaifeichen/CellMate_Android)
 
 ## What is CellMate? 
-Please refer to the README.md in https://github.com/SoftwareDefinedBuildings/CellMate_Server
+Please refer to the README.md in https://github.com/SoftwareDefinedBuildings/CellMate
 
 ## How to Install CellMate Android Client?
 
