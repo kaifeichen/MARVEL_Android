@@ -290,10 +290,10 @@ public class MainActivity extends ActionBarActivity implements SensorEventListen
         public void run() {
             try {
                 SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
-                String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
-                String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
+                String grpcServerAddr = preferences.getString(getString(R.string.Grpc_server_addr_key), getString(R.string.Grpc_server_addr_val));
+                String grpcServerPort = preferences.getString(getString(R.string.Grpc_server_port_key), getString(R.string.Grpc_server_port_val));
                 text.setText(String.valueOf(mthetaAcce).substring(0,5)+ "\n" + String.valueOf(mthetaGrav).substring(0,5));
-                new GrpcReqImgTask(cellmateServerAddr, Integer.valueOf(cellmateServerPort), mImage, mFx, mFy, mCx, mCy, mthetaAcce, mthetaGrav, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new GrpcReqImgTask(grpcServerAddr, Integer.valueOf(grpcServerPort), mImage, mFx, mFy, mCx, mCy, mthetaAcce, mthetaGrav, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }

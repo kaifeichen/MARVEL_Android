@@ -75,8 +75,7 @@ public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
             CellmateProto.ServerRespondMessage response = mStub.onClientQuery(request);
             result = response.getFoundName();
         } catch (StatusRuntimeException e) {
-//            System.out.println("port number is " + mPort);
-//            e.printStackTrace();
+            e.printStackTrace();
         }
         return result; // null means network error
     }
