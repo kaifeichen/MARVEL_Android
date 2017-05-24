@@ -4,5 +4,6 @@
     <string-array name="conn_types">
         <item>HTTP</item>
         <item>BOSSWAVE</item>
+        <item>GRPC</item>
     </string-array>
 </resources>

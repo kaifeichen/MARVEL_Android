@@ -15,3 +15,6 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+-keep class io.grpc.internal.DnsNameResolverProvider
+-keep class io.grpc.okhttp.OkHttpChannelProvider
