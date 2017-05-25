@@ -6,6 +6,7 @@
     <string name="off">Off</string>
     <string name="none">None</string>
     <string name="settings">Settings</string>
+    <string name="request_permission">This sample needs camera permission.</string>
 
     <string name="conn_type_key">conn_type_key</string>
     <string name="conn_type_title">Connection Type</string>

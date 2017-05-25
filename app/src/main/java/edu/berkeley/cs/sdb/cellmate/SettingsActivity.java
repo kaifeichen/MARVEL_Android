@@ -13,11 +13,7 @@ import android.preference.PreferenceGroup;
 public class SettingsActivity extends PreferenceActivity {
 
     public static class SettingsFragment extends PreferenceFragment {
-        private SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = new SharedPreferences.OnSharedPreferenceChangeListener() {
-            public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-                updatePrefSummary(findPreference(key));
-            }
-        };
+        private SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = (sharedPreferences, key) -> updatePrefSummary(findPreference(key));
 
         @Override
         public void onCreate(Bundle savedInstanceState) {
