@@ -49,6 +49,8 @@ import android.widget.Toast;
 import android.support.v7.app.AppCompatActivity;
 
 
+import com.splunk.mint.Mint;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -69,6 +71,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private static final String LOG_TAG = "CellMate";
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
+    private static final String MINT_API_KEY = "76da1102";
     private static final int REQUEST_CAMERA_PERMISSION = 1;
 
     private AutoFitTextureView mTextureView;
@@ -168,7 +171,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private final AutoFitImageReader.OnImageAvailableListener mOnImageAvailableListener = new AutoFitImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(Image image, double fx, double fy, double cx, double cy) {
-            SharedPreferences preferences = getActivity().getPreferences(Context.MODE_PRIVATE);
+            SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
             String connType = preferences.getString(getString(R.string.conn_type_key), getString(R.string.conn_type_val));
             String[] connTypes = getResources().getStringArray(R.array.conn_types);
             if (connType.equals(connTypes[0])) { // HTTP
@@ -232,7 +235,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         @Override
         public void run() {
             try {
-                SharedPreferences preferences = getActivity().getPreferences(Context.MODE_PRIVATE);
+                SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
                 String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
                 String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
                 String imagePostUrl = "http://" + cellmateServerAddr + ":" + cellmateServerPort + "/";
@@ -448,8 +451,10 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         mBosswaveClient = null;
         initBosswaveClient();
 
-        SharedPreferences preferences = getActivity().getPreferences(Context.MODE_PRIVATE);
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
         preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
+
+        Mint.initAndStartSession(getActivity(), MINT_API_KEY);
     }
 
     @Override
@@ -518,7 +523,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private void initBosswaveClient() {
         // Use onSharedPreferenceChanged for reconnection if user changes BOSSWAVE router
         if (!mIsBosswaveConnected && mBosswaveClient == null) {
-            SharedPreferences preferences = getActivity().getPreferences(Context.MODE_PRIVATE);
+            SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
             String bosswaveRouterAddr = preferences.getString(getString(R.string.bosswave_router_addr_key), getString(R.string.bosswave_router_addr_val));
             int bosswaveRouterPort = Integer.parseInt(preferences.getString(getString(R.string.bosswave_router_port_key), getString(R.string.bosswave_router_port_val)));
             try {
@@ -536,7 +541,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     }
 
     private void updatePreferenceCameraInfo() {
-        SharedPreferences preferences = getActivity().getPreferences(Context.MODE_PRIVATE);
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
         String cameraWidth = preferences.getString(getString(R.string.camera_width_key), getString(R.string.camera_width_val));
         String cameraHeight = preferences.getString(getString(R.string.camera_height_key), getString(R.string.camera_height_val));
         if (cameraWidth.equals(getString(R.string.camera_width_val)) || cameraHeight.equals(getString(R.string.camera_height_val))) {
@@ -580,7 +585,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 // the preview image will be cropped around center by Android to fit targetImageSize
                 // TODO: Android doesn't seem to crop the image for me, I have to build an ImageReader that resizes or crops images
                 Size targetSize = new Size(640, 480);
-                List<Size> imageSizes = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG));
+                List<Size> imageSizes = Arrays.asList(map.getOutputSizes(ImageFormat.YUV_420_888));
                 if (!imageSizes.contains(targetSize)) {
                     throw new RuntimeException("640x480 size is not supported");
                 }
@@ -870,25 +875,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 }
             });
         }
-    }
-
-    /**
-     * Return true if the given array contains the given integer.
-     *
-     * @param modes array to check.
-     * @param mode  integer to get for.
-     * @return true if the array contains the given integer, otherwise false.
-     */
-    private static boolean contains(int[] modes, int mode) {
-        if (modes == null) {
-            return false;
-        }
-        for (int i : modes) {
-            if (i == mode) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**
