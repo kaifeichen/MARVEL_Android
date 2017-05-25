@@ -22,7 +22,6 @@ import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
-import android.media.ImageReader;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
@@ -179,6 +178,8 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 mBackgroundHandler.post(new HttpPostImageRunnable(image, fx, fy, cx, cy));
             } else if (connType.equals(connTypes[1])) { // BOSSWAVE
                 mBackgroundHandler.post(new BWPublishImageRunnable(image, fx, fy, cx, cy));
+            } else if (connType.equals(connTypes[2])) { // GRPC
+                mBackgroundHandler.post(new GrpcPostImageRunnable(image, fx, fy, cx, cy));
             } else {
                 image.close();
                 throw new RuntimeException("Connection Type is Undefined");
@@ -266,7 +267,35 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             try {
                 String topic = "scratch.ns/cellmate";
                 System.out.println(topic);
-                new BwPubImgTask(mBosswaveClient, topic, mImage, mFx, mFy, mCx, mCy, mBwPubImaTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new BwPubImgTask(mBosswaveClient, topic, mImage, mFx, mFy, mCx, mCy, mBwPubImgTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private class GrpcPostImageRunnable implements Runnable {
+        private final Image mImage;
+        private final double mFx;
+        private final double mFy;
+        private final double mCx;
+        private final double mCy;
+
+        public GrpcPostImageRunnable(Image image, double fx, double fy, double cx, double cy) {
+            mImage = image;
+            mFx = fx;
+            mFy = fy;
+            mCx = cx;
+            mCy = cy;
+        }
+
+        @Override
+        public void run() {
+            try {
+                SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
+                String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
+                String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
+                new GrpcReqImgTask(cellmateServerAddr, Integer.valueOf(cellmateServerPort), mImage, mFx, mFy, mCx, mCy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -344,6 +373,29 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         }
     };
 
+    private GrpcReqImgTask.Listener mGrpcRecognitionListener = new GrpcReqImgTask.Listener() {
+        @Override
+        public void onResponse(String result) { // null means network error
+            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
+            if (result == null) {
+                showToast("Network error", Toast.LENGTH_SHORT);
+                mTarget = null;
+                mTextView.setText(getString(R.string.none));
+                setButtonsEnabled(false, false, true);
+            } else if (result.trim().equals("None")) {
+                showToast("Nothing recognized", Toast.LENGTH_SHORT);
+                mTarget = null;
+                mTextView.setText(getString(R.string.none));
+                setButtonsEnabled(false, false, true);
+            } else {
+                showToast(result + " recognized", Toast.LENGTH_SHORT);
+                mTarget = result.trim();
+                mTextView.setText(result);
+                setButtonsEnabled(true, true, true);
+            }
+        }
+    };
+
 
     private BwInitTask.Listener mBwInitTaskListener = new BwInitTask.Listener() {
         @Override
@@ -377,7 +429,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         }
     };
 
-    private BwPubImgTask.Listener mBwPubImaTaskListener = new BwPubImgTask.Listener() {
+    private BwPubImgTask.Listener mBwPubImgTaskListener = new BwPubImgTask.Listener() {
         @Override
         public void onResponse(String response) {
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server

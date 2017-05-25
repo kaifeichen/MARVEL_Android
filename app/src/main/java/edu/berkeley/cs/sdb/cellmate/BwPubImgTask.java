@@ -31,14 +31,12 @@ public class BwPubImgTask extends AsyncTask<Void, Void, String> {
     private double mFy;
     private double mCx;
     private double mCy;
-    private double mPitch;
-    private double mRoll;
 
     public interface Listener {
         void onResponse(String response);
     }
 
-    public BwPubImgTask(BosswaveClient bosswaveClient, String topic, Image image, double fx, double fy, double cx, double cy,double pitch, double roll, Listener listener) {
+    public BwPubImgTask(BosswaveClient bosswaveClient, String topic, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mBosswaveClient = bosswaveClient;
         mTopic = topic;
         mImage = image;
@@ -46,8 +44,6 @@ public class BwPubImgTask extends AsyncTask<Void, Void, String> {
         mFy = fy;
         mCx = cx;
         mCy = cy;
-        mPitch = pitch;
-        mRoll = roll;
         mTaskListener = listener;
         mSem = new Semaphore(0);
     }
@@ -102,8 +98,6 @@ public class BwPubImgTask extends AsyncTask<Void, Void, String> {
             PayloadObject poFy = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mFy).getBytes());
             PayloadObject poCx = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mCx).getBytes());
             PayloadObject poCy = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mCy).getBytes());
-            PayloadObject poPitch = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mPitch).getBytes());
-            PayloadObject poRoll = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mRoll).getBytes());
             builder.addPayloadObject(poHeader);
             builder.addPayloadObject(poIdentity);
             builder.addPayloadObject(poData);
@@ -113,8 +107,6 @@ public class BwPubImgTask extends AsyncTask<Void, Void, String> {
             builder.addPayloadObject(poFy);
             builder.addPayloadObject(poCx);
             builder.addPayloadObject(poCy);
-            builder.addPayloadObject(poPitch);
-            builder.addPayloadObject(poRoll);
             PublishRequest request = builder.build();
             mBosswaveClient.publish(request, mResponseHandler);
         } catch (IOException e) {
