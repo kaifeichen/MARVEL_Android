@@ -62,3 +62,6 @@ captures/
 
 ## I personally don't want anything in .idea
 .idea/
+
+# Generated protobuf class
+app/src/main/proto/temp/

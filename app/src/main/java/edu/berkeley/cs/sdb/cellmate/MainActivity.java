@@ -1,11 +1,7 @@
 package edu.berkeley.cs.sdb.cellmate;
 
-import android.app.Activity;
 import android.os.Bundle;
 import android.support.v7.app.ActionBarActivity;
-import android.support.v7.app.AppCompatActivity;
-
-import com.splunk.mint.Mint;
 
 public class MainActivity extends ActionBarActivity {
     @Override
