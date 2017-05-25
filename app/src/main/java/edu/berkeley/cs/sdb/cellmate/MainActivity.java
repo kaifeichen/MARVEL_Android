@@ -6,6 +6,7 @@ package edu.berkeley.cs.sdb.cellmate;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
@@ -22,10 +23,12 @@ import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.preference.PreferenceManager;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Base64;
@@ -58,11 +61,31 @@ import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
 import edu.berkeley.cs.sdb.bosswave.PayloadObject;
 import okhttp3.OkHttpClient;
 
-public class MainActivity extends ActionBarActivity {
+
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+
+
+
+
+public class MainActivity extends ActionBarActivity implements SensorEventListener {
+
+    //Variables for sensor
+    private SensorManager mSensorManager;
+    private Sensor sensor;
+    private Sensor sensorG;
+    private final float[] mAccelerometerReading = new float[3];
+    private final float[] mGravityReading = new float[3];
+    double mthetaAcce, mthetaGrav;
+    TextView text;
+
     private static final String LOG_TAG = "CellMate";
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
 
+    private static final int REQUEST_CAMERA_RESULT = 1;
     private AutoFitTextureView mTextureView;
     private TextView mTextView;
     private Button mOnButton;
@@ -185,13 +208,17 @@ public class MainActivity extends ActionBarActivity {
         private final double mFy;
         private final double mCx;
         private final double mCy;
+        private final double mthetaAcce;
+        private final double mthetaGrav;
 
-        public BWPublishImageRunnable(Image image, double fx, double fy, double cx, double cy) {
+        public BWPublishImageRunnable(Image image, double fx, double fy, double cx, double cy, double thetaAcce, double thetaGrav) {
             mImage = image;
             mFx = fx;
             mFy = fy;
             mCx = cx;
             mCy = cy;
+            mthetaAcce = thetaAcce;
+            mthetaGrav = thetaGrav;
         }
 
         @Override
@@ -199,7 +226,7 @@ public class MainActivity extends ActionBarActivity {
             try {
                 String topic = "scratch.ns/cellmate";
                 System.out.println(topic);
-                new BwPubImgTask(mBosswaveClient, topic, mImage, mFx, mFy, mCx, mCy, mBwPubImaTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new BwPubImgTask(mBosswaveClient, topic, mImage, mFx, mFy, mCx, mCy, mthetaAcce, mthetaGrav, mBwPubImaTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -212,13 +239,17 @@ public class MainActivity extends ActionBarActivity {
         private final double mFy;
         private final double mCx;
         private final double mCy;
+        private final double mthetaAcce;
+        private final double mthetaGrav;
 
-        public HttpPostImageRunnable(Image image, double fx, double fy, double cx, double cy) {
+        public HttpPostImageRunnable(Image image, double fx, double fy, double cx, double cy, double thetaAcce, double thetaGrav) {
             mImage = image;
             mFx = fx;
             mFy = fy;
             mCx = cx;
             mCy = cy;
+            mthetaAcce = thetaAcce;
+            mthetaGrav = thetaGrav;
         }
 
         @Override
@@ -228,7 +259,41 @@ public class MainActivity extends ActionBarActivity {
                 String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
                 String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
                 String imagePostUrl = "http://" + cellmateServerAddr + ":" + cellmateServerPort + "/";
-                new HttpPostImgTask(mHttpClient, imagePostUrl, mImage, mFx, mFy, mCx, mCy, mRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                text.setText(String.valueOf(mthetaAcce).substring(0,5)+ "\n" + String.valueOf(mthetaGrav).substring(0,5));
+                new HttpPostImgTask(mHttpClient, imagePostUrl, mImage, mFx, mFy, mCx, mCy, mthetaAcce, mthetaGrav, mRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    private class GrpcPostImageRunnable implements Runnable {
+        private final Image mImage;
+        private final double mFx;
+        private final double mFy;
+        private final double mCx;
+        private final double mCy;
+        private final double mthetaAcce;
+        private final double mthetaGrav;
+
+        public GrpcPostImageRunnable(Image image, double fx, double fy, double cx, double cy, double thetaAcce, double thetaGrav) {
+            mImage = image;
+            mFx = fx;
+            mFy = fy;
+            mCx = cx;
+            mCy = cy;
+            mthetaAcce = thetaAcce;
+            mthetaGrav = thetaGrav;
+        }
+
+        @Override
+        public void run() {
+            try {
+                SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
+                String grpcServerAddr = preferences.getString(getString(R.string.Grpc_server_addr_key), getString(R.string.Grpc_server_addr_val));
+                String grpcServerPort = preferences.getString(getString(R.string.Grpc_server_port_key), getString(R.string.Grpc_server_port_val));
+                text.setText(String.valueOf(mthetaAcce).substring(0,5)+ "\n" + String.valueOf(mthetaGrav).substring(0,5));
+                new GrpcReqImgTask(grpcServerAddr, Integer.valueOf(grpcServerPort), mImage, mFx, mFy, mCx, mCy, mthetaAcce, mthetaGrav, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -237,16 +302,18 @@ public class MainActivity extends ActionBarActivity {
 
     private final AutoFitImageReader.OnImageAvailableListener mOnImageAvailableListener = new AutoFitImageReader.OnImageAvailableListener() {
         @Override
-        public void onImageAvailable(Image image, double fx, double fy, double cx, double cy) {
+        public void onImageAvailable(Image image, double fx, double fy, double cx, double cy, double thetaAcce, double thetaGrav) {
             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
             String connType = preferences.getString(getString(R.string.conn_type_key), getString(R.string.conn_type_val));
             String[] connTypes = getResources().getStringArray(R.array.conn_types);
             if (connType.equals(connTypes[0])) { // HTTP
                 // AsyncTask task instance must be created and executed on the UI thread
-                runOnUiThread(new HttpPostImageRunnable(image, fx, fy, cx, cy));
+                runOnUiThread(new HttpPostImageRunnable(image, fx, fy, cx, cy, thetaAcce, thetaGrav));
             } else if (connType.equals(connTypes[1])) { // BOSSWAVE
-                runOnUiThread(new BWPublishImageRunnable(image, fx, fy, cx, cy));
-            } else {
+                runOnUiThread(new BWPublishImageRunnable(image, fx, fy, cx, cy, thetaAcce, thetaGrav));
+            } else if (connType.equals(connTypes[2])) { // GRPC
+                runOnUiThread(new GrpcPostImageRunnable(image, fx, fy, cx, cy, thetaAcce, thetaGrav));
+            }else {
                 image.close();
                 throw new RuntimeException("Connection Type is Undefined");
             }
@@ -319,7 +386,7 @@ public class MainActivity extends ActionBarActivity {
     private final View.OnClickListener mCaptureButtonOnClickListener = new View.OnClickListener() {
         public void onClick(View v) {
             Log.d(LOG_TAG, "TAG_TIME capture " + System.currentTimeMillis()); // start timing
-            if (mImageReader.requestCapture()) {
+            if (mImageReader.requestCapture(mthetaAcce, mthetaGrav)) {
                 setButtonsEnabled(false, false, false);
             } else {
                 showToast("Image capture failed. (Have you set the intrinsic parameters?)", Toast.LENGTH_SHORT);
@@ -413,6 +480,29 @@ public class MainActivity extends ActionBarActivity {
         }
     };
 
+    private GrpcReqImgTask.Listener mGrpcRecognitionListener = new GrpcReqImgTask.Listener() {
+        @Override
+        public void onResponse(String result) { // null means network error
+            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
+            if (result == null) {
+                showToast("Network error", Toast.LENGTH_SHORT);
+                mTarget = null;
+                mTextView.setText(getString(R.string.none));
+                setButtonsEnabled(false, false, true);
+            } else if (result.trim().equals("None")) {
+                showToast("Nothing recognized", Toast.LENGTH_SHORT);
+                mTarget = null;
+                mTextView.setText(getString(R.string.none));
+                setButtonsEnabled(false, false, true);
+            } else {
+                showToast(result + " recognized", Toast.LENGTH_SHORT);
+                mTarget = result.trim();
+                mTextView.setText(result);
+                setButtonsEnabled(true, true, true);
+            }
+        }
+    };
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -447,6 +537,17 @@ public class MainActivity extends ActionBarActivity {
 
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getApplicationContext());
         preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
+
+        //create about sensor
+        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        sensor = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
+        sensorG = mSensorManager.getDefaultSensor(Sensor.TYPE_GRAVITY);
+        mSensorManager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_FASTEST,
+                SensorManager.SENSOR_DELAY_UI);
+        mSensorManager.registerListener(this, sensorG, SensorManager.SENSOR_DELAY_FASTEST,
+                SensorManager.SENSOR_DELAY_UI);
+        text = (TextView) findViewById(R.id.textView);
+
     }
 
     @Override
@@ -469,6 +570,12 @@ public class MainActivity extends ActionBarActivity {
         } else {
             mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         }
+
+        //resume about sensor
+        mSensorManager.registerListener(this, sensor,
+                SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
+        mSensorManager.registerListener(this, sensorG,
+                SensorManager.SENSOR_DELAY_NORMAL, SensorManager.SENSOR_DELAY_UI);
     }
 
     @Override
@@ -478,6 +585,10 @@ public class MainActivity extends ActionBarActivity {
         closeCamera();
         stopBackgroundThread();
         super.onPause();
+
+        //pause about sensor
+        // Don't receive any more updates from either sensor.
+        mSensorManager.unregisterListener(this);
     }
 
     @Override
@@ -645,10 +756,28 @@ public class MainActivity extends ActionBarActivity {
         configureTransform(surfaceWidth, surfaceHeight);
         CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         try {
+            Log.v("CAMERA", mCameraId + " " + mCameraDeviceStateCallback);
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
-            manager.openCamera(mCameraId, mCameraDeviceStateCallback, mBackgroundHandler);
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M){
+                if(ContextCompat.checkSelfPermission(this, android.Manifest.permission.CAMERA)
+                        == PackageManager.PERMISSION_GRANTED){
+                    manager.openCamera(mCameraId, mCameraDeviceStateCallback,mBackgroundHandler);
+                }
+                else {
+                    if (shouldShowRequestPermissionRationale(android.Manifest.permission.CAMERA)){
+                        Toast.makeText(this,"No Permission to use the Camera services", Toast.LENGTH_SHORT).show();
+                    }
+                    requestPermissions(new String[] {android.Manifest.permission.CAMERA},REQUEST_CAMERA_RESULT);
+                }
+            }
+            else {
+                manager.openCamera(mCameraId, mCameraDeviceStateCallback, mBackgroundHandler);
+            }
+
+//            manager.openCamera(mCameraId, mCameraDeviceStateCallback, mBackgroundHandler);
         } catch (CameraAccessException e) {
             e.printStackTrace();
         } catch (InterruptedException e) {
@@ -656,6 +785,20 @@ public class MainActivity extends ActionBarActivity {
         }
 
         updatePreferenceCameraInfo(); // update preference values after we get camera set up
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        switch (requestCode){
+            case  REQUEST_CAMERA_RESULT:
+                if (grantResults[0] != PackageManager.PERMISSION_GRANTED){
+                    Toast.makeText(this, "Cannot run application because camera service permission have not been granted", Toast.LENGTH_SHORT).show();
+                }
+                break;
+            default:
+                super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+                break;
+        }
     }
 
     /**
@@ -925,4 +1068,41 @@ public class MainActivity extends ActionBarActivity {
         }
         return -1;
     }
+
+
+    //functions about sensor
+    @Override
+    public void onAccuracyChanged(Sensor sensor, int accuracy) {
+        // Do something here if sensor accuracy changes.
+        // You must implement this callback in your code.
+    }
+
+    @Override
+    public void onSensorChanged(SensorEvent event) {
+        if (event.sensor.getType() == sensor.TYPE_ACCELEROMETER) {
+            System.arraycopy(event.values, 0, mAccelerometerReading,
+                    0, mAccelerometerReading.length);
+        }
+        else if (event.sensor.getType() == Sensor.TYPE_GRAVITY) {
+            System.arraycopy(event.values, 0, mGravityReading,
+                    0, mGravityReading.length);
+        }
+        mthetaAcce = angle_to_norm(mAccelerometerReading);
+        mthetaGrav = angle_to_norm(mGravityReading);
+
+    }
+    public double angle_to_norm(float[] sensorReading) {
+        double axSq = sensorReading[0] * sensorReading[0];
+        double aySq = sensorReading[1] * sensorReading[1];
+        double azSq = sensorReading[2] * sensorReading[2];
+        double cosTheta = sensorReading[2]/Math.sqrt(axSq + aySq + azSq);
+        double thta = Math.acos(cosTheta);
+        return Math.toDegrees(thta);
+    }
+
+
+
+
+
+
 }
