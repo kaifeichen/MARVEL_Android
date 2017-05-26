@@ -5,6 +5,7 @@ import android.os.AsyncTask;
 import android.util.Log;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -45,9 +46,13 @@ public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     @Override
     protected String doInBackground(Void... voids) {
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        mImage.close();
         RequestBody requestBody = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
-                .addFormDataPart("file", timeStamp, RequestBody.create(MediaType.parse("application/octet-stream"), ImgCodec.compressJPEG(mImage)))
+                .addFormDataPart("file", timeStamp, RequestBody.create(MediaType.parse("application/octet-stream"), bytes))
                 .addFormDataPart("fx", Double.toString(mFx))
                 .addFormDataPart("fy", Double.toString(mFy))
                 .addFormDataPart("cx", Double.toString(mCx))
@@ -75,7 +80,6 @@ public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
 
     @Override
     protected void onPostExecute(String result) {
-        mImage.close();
         mListener.onResponse(result);
     }
 }

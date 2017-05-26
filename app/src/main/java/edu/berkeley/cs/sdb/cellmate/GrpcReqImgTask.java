@@ -1,22 +1,16 @@
 package edu.berkeley.cs.sdb.cellmate;
 
 
-import android.os.AsyncTask;
-
-import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
-
-import io.grpc.StatusRuntimeException;
-
-
-
 import android.media.Image;
-
+import android.os.AsyncTask;
 
 import com.google.protobuf.ByteString;
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
+import java.nio.ByteBuffer;
+
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.StatusRuntimeException;
 
 
 public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
@@ -52,11 +46,15 @@ public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
     @Override
     protected String doInBackground(Void... voids) {
         String result = null;
+        ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
+        byte[] bytes = new byte[buffer.remaining()];
+        buffer.get(bytes);
+        mImage.close();
         try {
             mChannel = ManagedChannelBuilder.forAddress(mHost, mPort).usePlaintext(true).build();
             GrpcServiceGrpc.GrpcServiceBlockingStub mStub = GrpcServiceGrpc.newBlockingStub(mChannel);
             CellmateProto.ClientQueryMessage request = CellmateProto.ClientQueryMessage.newBuilder()
-                    .setImage(ByteString.copyFrom(ImgCodec.compressJPEG(mImage)))
+                    .setImage(ByteString.copyFrom(bytes))
                     .setFx(mFx)
                     .setFy(mFy)
                     .setCx(mCx)
@@ -72,11 +70,8 @@ public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
         return result; // null means network error
     }
 
-
-
     @Override
     protected void onPostExecute(String result) {
-        mImage.close();
         mListener.onResponse(result);
     }
 }

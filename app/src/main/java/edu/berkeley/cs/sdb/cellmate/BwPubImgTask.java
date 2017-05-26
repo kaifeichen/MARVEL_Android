@@ -4,6 +4,7 @@ import android.media.Image;
 import android.os.AsyncTask;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
@@ -81,17 +82,24 @@ public class BwPubImgTask extends AsyncTask<Void, Void, String> {
         try {
             String header = "Cellmate Image";
             String identity = UUID.randomUUID().toString().substring(0, 10);
+
             // Subscribe to a Bosswave URI
             SubscribeRequest.Builder subsbuilder = new SubscribeRequest.Builder(mTopic + "/" + identity);
             SubscribeRequest subsRequest = subsbuilder.build();
             mBosswaveClient.subscribe(subsRequest, new ResponseErrorHandler(), new TextResultHandler());
+
+            // publish
+            ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+            mImage.close();
             PublishRequest.Builder builder = new PublishRequest.Builder(mTopic);
             builder.setAutoChain(true);
             builder.setChainElaborationLevel(ChainElaborationLevel.PARTIAL);
             builder.clearPayloadObjects();
             PayloadObject poHeader = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), header.getBytes());
             PayloadObject poIdentity = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), identity.getBytes());
-            PayloadObject poData = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), ImgCodec.compressJPEG(mImage));
+            PayloadObject poData = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), bytes);
             PayloadObject poWidth = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Integer.toString(mImage.getWidth()).getBytes());
             PayloadObject poHeight = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Integer.toString(mImage.getHeight()).getBytes());
             PayloadObject poFx = new PayloadObject(new PayloadObject.Type(new byte[]{64, 0, 0, 0}), Double.toString(mFx).getBytes());
@@ -124,7 +132,6 @@ public class BwPubImgTask extends AsyncTask<Void, Void, String> {
 
     @Override
     protected void onPostExecute(String response) {
-        mImage.close();
         mTaskListener.onResponse(response);
     }
 }
