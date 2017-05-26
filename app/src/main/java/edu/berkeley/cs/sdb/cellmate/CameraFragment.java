@@ -32,6 +32,7 @@ import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
+import android.support.v7.app.AppCompatActivity;
 import android.util.Base64;
 import android.util.Log;
 import android.util.Size;
@@ -46,8 +47,6 @@ import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.support.v7.app.AppCompatActivity;
-
 
 import com.splunk.mint.Mint;
 
@@ -80,7 +79,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private Button mOnButton;
     private Button mOffButton;
     private Button mCaptureButton;
-    private Toast mToast;
 
     // ID of the current CameraDevice
     private String mCameraId;
@@ -90,8 +88,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private CameraDevice mCameraDevice;
     // The android.util.Size of camera preview.
     private Size mPreviewSize;
-    // The CameraCharacteristics for the currently configured camera device.
-    private CameraCharacteristics mCharacteristics;
     // An additional thread for running tasks that shouldn't block the UI.
     private HandlerThread mBackgroundThread;
     // A Handler for running tasks in the background.
@@ -106,8 +102,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private Semaphore mCameraOpenCloseLock = new Semaphore(1);
     // Whether the current camera device supports Flash or not.
     private boolean mFlashSupported;
-    //Orientation of the camera sensor
-    private int mSensorOrientation;
     // The HTTP Client used for transmitting image
     private OkHttpClient mHttpClient;
     // The Bosswave Client used for sending control command
@@ -142,15 +136,16 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
 
     private CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
         @Override
-        public void onOpened(CameraDevice camera) {
+        public void onOpened(@NonNull CameraDevice camera) {
             Log.i(LOG_TAG, "CameraDevice onOpened");
             mCameraOpenCloseLock.release();
             mCameraDevice = camera;
             createCameraPreviewSession();
+            setButtonsEnabled(false, false, true);
         }
 
         @Override
-        public void onDisconnected(CameraDevice camera) {
+        public void onDisconnected(@NonNull CameraDevice camera) {
             Log.i(LOG_TAG, "CameraDevice onDisconnected");
             mCameraOpenCloseLock.release();
             camera.close();
@@ -158,7 +153,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         }
 
         @Override
-        public void onError(CameraDevice camera, int error) {
+        public void onError(@NonNull CameraDevice camera, int error) {
             Log.i(LOG_TAG, "CameraDevice onError");
             mCameraOpenCloseLock.release();
             camera.close();
@@ -374,7 +369,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private final View.OnClickListener mCaptureButtonOnClickListener = new View.OnClickListener() {
         public void onClick(View v) {
             Log.d(LOG_TAG, "TAG_TIME capture " + System.currentTimeMillis()); // start timing
-            if (mCaptureRequest.getAndSet(true)) {
+            if (!mCaptureRequest.getAndSet(true)) {
                 setButtonsEnabled(false, false, false);
             } else {
                 showToast("Image capture failed. (Have you set the intrinsic parameters?)", Toast.LENGTH_SHORT);
@@ -682,18 +677,18 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 // Find out if we need to swap dimension to get the preview size relative to sensor coordinate.
                 int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
                 //noinspection ConstantConditions
-                mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+                int sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
                 boolean swappedDimensions = false;
                 switch (displayRotation) {
                     case Surface.ROTATION_0:
                     case Surface.ROTATION_180:
-                        if (mSensorOrientation == 90 || mSensorOrientation == 270) {
+                        if (sensorOrientation == 90 || sensorOrientation == 270) {
                             swappedDimensions = true;
                         }
                         break;
                     case Surface.ROTATION_90:
                     case Surface.ROTATION_270:
-                        if (mSensorOrientation == 0 || mSensorOrientation == 180) {
+                        if (sensorOrientation == 0 || sensorOrientation == 180) {
                             swappedDimensions = true;
                         }
                         break;
@@ -737,7 +732,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 Boolean available = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
                 mFlashSupported = available == null ? false : available;
 
-                mCharacteristics = characteristics;
                 mCameraId = cameraId;
                 return;
             }
