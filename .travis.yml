@@ -37,6 +37,7 @@ cache:
   directories:
     - $HOME/.gradle/caches/
     - $HOME/.gradle/wrapper/
+    - $HOME/.android/build-cache
 
 before_script:
   - wget https://services.gradle.org/distributions/gradle-3.3-bin.zip
