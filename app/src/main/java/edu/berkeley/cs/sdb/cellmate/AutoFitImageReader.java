@@ -28,11 +28,9 @@ public class AutoFitImageReader implements AutoCloseable {
     private double mCameraFy;
     private double mCameraCx;
     private double mCameraCy;
-    private double mthetaAcce;
-    private double mthetaGrav;
 
     public interface OnImageAvailableListener {
-        void onImageAvailable(Image image, double fx, double fy, double cx, double cy, double thetaAcce, double thetaGrav);
+        void onImageAvailable(Image image, double fx, double fy, double cx, double cy);
     }
 
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
@@ -69,9 +67,9 @@ public class AutoFitImageReader implements AutoCloseable {
                 double cx = mCameraCx * scale;
                 double cy = mCameraCy * scale;
                 if (getRotateCount() % 2 == 0) {
-                    mListener.onImageAvailable(image, fx, fy, cx, cy, mthetaAcce, mthetaGrav);
+                    mListener.onImageAvailable(image, fx, fy, cx, cy);
                 } else {
-                    mListener.onImageAvailable(image, fy, fx, cy, cx, mthetaAcce, mthetaGrav);
+                    mListener.onImageAvailable(image, fy, fx, cy, cx);
                 }
             } else {
                 image.close();
@@ -115,7 +113,7 @@ public class AutoFitImageReader implements AutoCloseable {
      * Request the ImageReader to call the listener with the next imediate image.
      * This method is thread safe.
      */
-    public boolean requestCapture(double thetaAcce, double thetaGrav) {
+    public boolean requestCapture() {
         // Assume the camera is not changed between here and when the image is available
 
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(mContext);
@@ -125,8 +123,6 @@ public class AutoFitImageReader implements AutoCloseable {
         mCameraFy = Double.parseDouble(preferences.getString(mContext.getString(R.string.camera_fy_key), mContext.getString(R.string.camera_fy_val)));
         mCameraCx = Double.parseDouble(preferences.getString(mContext.getString(R.string.camera_cx_key), mContext.getString(R.string.camera_cx_val)));
         mCameraCy = Double.parseDouble(preferences.getString(mContext.getString(R.string.camera_cy_key), mContext.getString(R.string.camera_cy_val)));
-        mthetaAcce = thetaAcce;
-        mthetaGrav = thetaGrav;
 
         if (mCameraWidth == Integer.parseInt(mContext.getString(R.string.camera_width_val))
                 || mCameraHeight == Integer.parseInt(mContext.getString(R.string.camera_height_val))

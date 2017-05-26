@@ -19,10 +19,6 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 
 
-/**
- * Created by tongli on 5/21/17.
- */
-
 public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
     private static final String LOG_TAG = "cellmate";
 
@@ -36,15 +32,13 @@ public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
     private double mFy;
     private double mCx;
     private double mCy;
-    private double mthetaAcce;
-    private double mthetaGrav;
     private Listener mListener;
 
     public interface Listener {
         void onResponse(String result); // null means network error
     }
 
-    public GrpcReqImgTask(String host, int port, Image image, double fx, double fy, double cx, double cy, double thetaAcce, double thetaGrav, Listener listener) {
+    public GrpcReqImgTask(String host, int port, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mHost = host;
         mPort = port;
         mImage = image;
@@ -52,8 +46,6 @@ public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
         mFy = fy;
         mCx = cx;
         mCy = cy;
-        mthetaAcce = thetaAcce;
-        mthetaGrav = thetaGrav;
         mListener = listener;
     }
 

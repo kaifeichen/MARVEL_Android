@@ -25,15 +25,13 @@ public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     private double mFy;
     private double mCx;
     private double mCy;
-    private double mthetaAcce;
-    private double mthetaGrav;
     private Listener mListener;
 
     public interface Listener {
         void onResponse(String result); // null means network error
     }
 
-    public HttpPostImgTask(OkHttpClient httpClient, String url, Image image, double fx, double fy, double cx, double cy, double thetaAcce, double thetaGrav, Listener listener) {
+    public HttpPostImgTask(OkHttpClient httpClient, String url, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mHttpClient = httpClient;
         mUrl = url;
         mImage = image;
@@ -41,8 +39,6 @@ public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
         mFy = fy;
         mCx = cx;
         mCy = cy;
-        mthetaAcce = thetaAcce;
-        mthetaGrav = thetaGrav;
         mListener = listener;
     }
 
@@ -56,8 +52,6 @@ public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
                 .addFormDataPart("fy", Double.toString(mFy))
                 .addFormDataPart("cx", Double.toString(mCx))
                 .addFormDataPart("cy", Double.toString(mCy))
-                .addFormDataPart("thetaAcce", Double.toString(mthetaAcce))
-                .addFormDataPart("thetaGrav", Double.toString(mthetaGrav))
                 .build();
         Request request = new Request.Builder()
                 .url(mUrl)
