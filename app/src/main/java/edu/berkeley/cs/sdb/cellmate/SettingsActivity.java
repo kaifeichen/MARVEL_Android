@@ -12,6 +12,15 @@ import android.preference.PreferenceGroup;
 
 public class SettingsActivity extends PreferenceActivity {
 
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        getFragmentManager().beginTransaction()
+                .replace(android.R.id.content, new SettingsFragment())
+                .commit();
+
+    }
+
     public static class SettingsFragment extends PreferenceFragment {
         private SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = new SharedPreferences.OnSharedPreferenceChangeListener() {
             public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
@@ -66,16 +75,6 @@ public class SettingsActivity extends PreferenceActivity {
                 p.setSummary(editTextPref.getText());
             }
         }
-    }
-
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        getFragmentManager().beginTransaction()
-                .replace(android.R.id.content, new SettingsFragment())
-                .commit();
-
     }
 
 

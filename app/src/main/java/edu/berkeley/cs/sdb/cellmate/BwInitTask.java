@@ -19,22 +19,6 @@ public class BwInitTask extends AsyncTask<Void, Void, Boolean> {
     private AtomicBoolean mSuccess;
     private String mBosswaveRouterAddr;
     private int mBbosswaveRouterPort;
-
-    public interface Listener {
-        void onResponse(boolean success, BosswaveClient client);
-    }
-
-    public BwInitTask(File keyFile, Listener listener, String bosswaveRouterAddr, int bosswaveRouterPort) {
-        mKeyFile = keyFile;
-        mTaskListener = listener;
-        mSem = new Semaphore(0);
-        mSuccess = new AtomicBoolean(false);
-        mBosswaveRouterAddr = bosswaveRouterAddr;
-        mBbosswaveRouterPort = bosswaveRouterPort;
-        System.out.println("bowsss wave inite ");
-
-    }
-
     private ResponseHandler mResponseHandler = new ResponseHandler() {
         @Override
         public void onResponseReceived(BosswaveResponse response) {
@@ -48,6 +32,17 @@ public class BwInitTask extends AsyncTask<Void, Void, Boolean> {
             mSem.release();
         }
     };
+
+    public BwInitTask(File keyFile, Listener listener, String bosswaveRouterAddr, int bosswaveRouterPort) {
+        mKeyFile = keyFile;
+        mTaskListener = listener;
+        mSem = new Semaphore(0);
+        mSuccess = new AtomicBoolean(false);
+        mBosswaveRouterAddr = bosswaveRouterAddr;
+        mBbosswaveRouterPort = bosswaveRouterPort;
+        System.out.println("bowsss wave inite ");
+
+    }
 
     @Override
     protected Boolean doInBackground(Void... voids) {
@@ -74,5 +69,9 @@ public class BwInitTask extends AsyncTask<Void, Void, Boolean> {
     @Override
     protected void onPostExecute(Boolean success) {
         mTaskListener.onResponse(success, mBosswaveClient);
+    }
+
+    public interface Listener {
+        void onResponse(boolean success, BosswaveClient client);
     }
 }

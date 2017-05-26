@@ -10,10 +10,6 @@ public class BwCloseTask extends AsyncTask<Void, Void, Boolean> {
     private BosswaveClient mBosswaveClient;
     private Listener mTaskListener;
 
-    public interface Listener {
-        void onResponse(boolean success);
-    }
-
     public BwCloseTask(BosswaveClient bosswaveClient, Listener listener) {
         mBosswaveClient = bosswaveClient;
         mTaskListener = listener;
@@ -33,5 +29,9 @@ public class BwCloseTask extends AsyncTask<Void, Void, Boolean> {
     @Override
     protected void onPostExecute(Boolean success) {
         mTaskListener.onResponse(success);
+    }
+
+    public interface Listener {
+        void onResponse(boolean success);
     }
 }

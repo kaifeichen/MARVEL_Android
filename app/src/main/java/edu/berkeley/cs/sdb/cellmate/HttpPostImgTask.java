@@ -6,7 +6,6 @@ import android.util.Log;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 
 import okhttp3.MediaType;
@@ -15,6 +14,8 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+
+import static java.text.DateFormat.getDateTimeInstance;
 
 public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     private static final String LOG_TAG = "cellmate";
@@ -27,10 +28,6 @@ public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     private double mCx;
     private double mCy;
     private Listener mListener;
-
-    public interface Listener {
-        void onResponse(String result); // null means network error
-    }
 
     public HttpPostImgTask(OkHttpClient httpClient, String url, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mHttpClient = httpClient;
@@ -45,7 +42,7 @@ public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
 
     @Override
     protected String doInBackground(Void... voids) {
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String timeStamp = getDateTimeInstance().format(new Date());
         ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
         byte[] bytes = new byte[buffer.remaining()];
         buffer.get(bytes);
@@ -81,5 +78,9 @@ public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     @Override
     protected void onPostExecute(String result) {
         mListener.onResponse(result);
+    }
+
+    public interface Listener {
+        void onResponse(String result); // null means network error
     }
 }
