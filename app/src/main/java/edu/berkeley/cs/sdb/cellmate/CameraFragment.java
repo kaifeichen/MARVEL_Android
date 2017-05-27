@@ -103,36 +103,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private ImageReader mImageReader;
     // CaptureRequest.Builder for the camera preview
     private CaptureRequest.Builder mPreviewRequestBuilder;
-    private final CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
-        @Override
-        public void onOpened(@NonNull CameraDevice camera) {
-            Log.i(LOG_TAG, "CameraDevice onOpened");
-            mCameraOpenCloseLock.release();
-            mCameraDevice = camera;
-            createCameraPreviewSession();
-            setButtonsEnabled(false, false, true);
-        }
-
-        @Override
-        public void onDisconnected(@NonNull CameraDevice camera) {
-            Log.i(LOG_TAG, "CameraDevice onDisconnected");
-            mCameraOpenCloseLock.release();
-            camera.close();
-            mCameraDevice = null;
-        }
-
-        @Override
-        public void onError(@NonNull CameraDevice camera, int error) {
-            Log.i(LOG_TAG, "CameraDevice onError");
-            mCameraOpenCloseLock.release();
-            camera.close();
-            mCameraDevice = null;
-            Activity activity = getActivity();
-            if (activity != null) {
-                activity.finish();
-            }
-        }
-    };
     // Whether the current camera device supports Flash or not.
     private boolean mFlashSupported;
     private final CameraCaptureSession.StateCallback mSessionStateCallback = new CameraCaptureSession.StateCallback() {
@@ -165,25 +135,34 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             showToast("onConfigureFailed", Toast.LENGTH_LONG);
         }
     };
-    private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+    private final CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
         @Override
-        public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-            Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
-            openCamera(width, height);
+        public void onOpened(@NonNull CameraDevice camera) {
+            Log.i(LOG_TAG, "CameraDevice onOpened");
+            mCameraOpenCloseLock.release();
+            mCameraDevice = camera;
+            createCameraPreviewSession();
+            setButtonsEnabled(false, false, true);
         }
 
         @Override
-        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-            configureTransform(width, height);
+        public void onDisconnected(@NonNull CameraDevice camera) {
+            Log.i(LOG_TAG, "CameraDevice onDisconnected");
+            mCameraOpenCloseLock.release();
+            camera.close();
+            mCameraDevice = null;
         }
 
         @Override
-        public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-            return true;
-        }
-
-        @Override
-        public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+        public void onError(@NonNull CameraDevice camera, int error) {
+            Log.i(LOG_TAG, "CameraDevice onError");
+            mCameraOpenCloseLock.release();
+            camera.close();
+            mCameraDevice = null;
+            Activity activity = getActivity();
+            if (activity != null) {
+                activity.finish();
+            }
         }
     };
     // The HTTP Client used for transmitting image
@@ -192,32 +171,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private BosswaveClient mBosswaveClient;
     // Whethre the Bosswave Client is connected
     private boolean mIsBosswaveConnected;
-    private final BwCloseTask.Listener mBwCloseTaskListener = new BwCloseTask.Listener() {
-        @Override
-        public void onResponse(boolean success) {
-            if (success) {
-                showToast("Bosswave disconnected", Toast.LENGTH_SHORT);
-                mIsBosswaveConnected = false;
-                mBosswaveClient = null;
-                // always try to reconnect
-                initBosswaveClient();
-            } else {
-                showToast("Bosswave close failed", Toast.LENGTH_SHORT);
-            }
-        }
-    };
-    private final SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = new SharedPreferences.OnSharedPreferenceChangeListener() {
-        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-            // when BOSSWAVE router changes, we need to reconnect
-            if (key.equals(getString(R.string.bosswave_router_addr_key)) || key.equals(getString(R.string.bosswave_router_port_key)) || key.equals(getString(R.string.bosswave_key_base64_key))) {
-                if (mIsBosswaveConnected) {
-                    new BwCloseTask(mBosswaveClient, mBwCloseTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-                } else {
-                    initBosswaveClient();
-                }
-            }
-        }
-    };
     // The current recognized object name
     private String mTarget;
     private final HttpPostImgTask.Listener mRecognitionListener = new HttpPostImgTask.Listener() {
@@ -280,6 +233,32 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             }
         }
     };
+    private final BwCloseTask.Listener mBwCloseTaskListener = new BwCloseTask.Listener() {
+        @Override
+        public void onResponse(boolean success) {
+            if (success) {
+                showToast("Bosswave disconnected", Toast.LENGTH_SHORT);
+                mIsBosswaveConnected = false;
+                mBosswaveClient = null;
+                // always try to reconnect
+                initBosswaveClient();
+            } else {
+                showToast("Bosswave close failed", Toast.LENGTH_SHORT);
+            }
+        }
+    };
+    private final SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = new SharedPreferences.OnSharedPreferenceChangeListener() {
+        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+            // when BOSSWAVE router changes, we need to reconnect
+            if (key.equals(getString(R.string.bosswave_router_addr_key)) || key.equals(getString(R.string.bosswave_router_port_key)) || key.equals(getString(R.string.bosswave_key_base64_key))) {
+                if (mIsBosswaveConnected) {
+                    new BwCloseTask(mBosswaveClient, mBwCloseTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                } else {
+                    initBosswaveClient();
+                }
+            }
+        }
+    };
     private final BwPubImgTask.Listener mBwPubImgTaskListener = new BwPubImgTask.Listener() {
         @Override
         public void onResponse(String response) {
@@ -334,6 +313,27 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             } else {
                 image.close();
             }
+        }
+    };
+    private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+        @Override
+        public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+            Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
+            openCamera(width, height);
+        }
+
+        @Override
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+            configureTransform(width, height);
+        }
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+            return true;
+        }
+
+        @Override
+        public void onSurfaceTextureUpdated(SurfaceTexture surface) {
         }
     };
     private final View.OnClickListener mCaptureButtonOnClickListener = new View.OnClickListener() {
