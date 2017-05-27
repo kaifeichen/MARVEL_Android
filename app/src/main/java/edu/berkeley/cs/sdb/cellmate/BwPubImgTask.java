@@ -20,19 +20,18 @@ import edu.berkeley.cs.sdb.bosswave.ResultHandler;
 import edu.berkeley.cs.sdb.bosswave.SubscribeRequest;
 
 
-public class BwPubImgTask extends AsyncTask<Void, Void, String> {
-    private BosswaveClient mBosswaveClient;
-    private String mTopic;
-    private Image mImage;
-    private PayloadObject.Type mType;
-    private Listener mTaskListener;
-    private Semaphore mSem;
+class BwPubImgTask extends AsyncTask<Void, Void, String> {
+    private final BosswaveClient mBosswaveClient;
+    private final String mTopic;
+    private final Image mImage;
+    private final Listener mTaskListener;
+    private final Semaphore mSem;
+    private final double mFx;
+    private final double mFy;
+    private final double mCx;
+    private final double mCy;
     private String mResult;
-    private double mFx;
-    private double mFy;
-    private double mCx;
-    private double mCy;
-    private ResponseHandler mResponseHandler = new ResponseHandler() {
+    private final ResponseHandler mResponseHandler = new ResponseHandler() {
         @Override
         public void onResponseReceived(BosswaveResponse response) {
             mResult = response.getStatus();

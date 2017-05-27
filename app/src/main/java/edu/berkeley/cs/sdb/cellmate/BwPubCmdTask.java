@@ -12,15 +12,15 @@ import edu.berkeley.cs.sdb.bosswave.PayloadObject;
 import edu.berkeley.cs.sdb.bosswave.PublishRequest;
 import edu.berkeley.cs.sdb.bosswave.ResponseHandler;
 
-public class BwPubCmdTask extends AsyncTask<Void, Void, String> {
-    private BosswaveClient mBosswaveClient;
-    private String mTopic;
-    private byte[] mData;
-    private PayloadObject.Type mType;
-    private Listener mTaskListener;
-    private Semaphore mSem;
+class BwPubCmdTask extends AsyncTask<Void, Void, String> {
+    private final BosswaveClient mBosswaveClient;
+    private final String mTopic;
+    private final byte[] mData;
+    private final PayloadObject.Type mType;
+    private final Listener mTaskListener;
+    private final Semaphore mSem;
     private String mResult;
-    private ResponseHandler mResponseHandler = new ResponseHandler() {
+    private final ResponseHandler mResponseHandler = new ResponseHandler() {
         @Override
         public void onResponseReceived(BosswaveResponse response) {
             mResult = response.getStatus();

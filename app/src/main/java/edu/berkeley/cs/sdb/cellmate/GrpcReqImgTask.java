@@ -13,17 +13,15 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 
 
-public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
-    private static final String LOG_TAG = "cellmate";
-
-    private String mHost;
-    private int mPort;
-    private Image mImage;
-    private double mFx;
-    private double mFy;
-    private double mCx;
-    private double mCy;
-    private Listener mListener;
+class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
+    private final String mHost;
+    private final int mPort;
+    private final Image mImage;
+    private final double mFx;
+    private final double mFy;
+    private final double mCx;
+    private final double mCy;
+    private final Listener mListener;
 
     public GrpcReqImgTask(String host, int port, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mHost = host;

@@ -17,17 +17,17 @@ import okhttp3.Response;
 
 import static java.text.DateFormat.getDateTimeInstance;
 
-public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
+class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     private static final String LOG_TAG = "cellmate";
 
-    private OkHttpClient mHttpClient;
-    private String mUrl;
-    private Image mImage;
-    private double mFx;
-    private double mFy;
-    private double mCx;
-    private double mCy;
-    private Listener mListener;
+    private final OkHttpClient mHttpClient;
+    private final String mUrl;
+    private final Image mImage;
+    private final double mFx;
+    private final double mFy;
+    private final double mCx;
+    private final double mCy;
+    private final Listener mListener;
 
     public HttpPostImgTask(OkHttpClient httpClient, String url, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mHttpClient = httpClient;

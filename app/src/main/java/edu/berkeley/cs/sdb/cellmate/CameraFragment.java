@@ -73,13 +73,20 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
     private static final String MINT_API_KEY = "76da1102";
     private static final int REQUEST_CAMERA_PERMISSION = 1;
-
+    // A semaphore to prevent the app from exiting before closing the camera.
+    private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
     private AutoFitTextureView mTextureView;
     private TextView mTextView;
     private Button mOnButton;
     private Button mOffButton;
     private Button mCaptureButton;
-
+    private final BwPubCmdTask.Listener mBwPubTaskListener = new BwPubCmdTask.Listener() {
+        @Override
+        public void onResponse(String response) {
+            showToast("Control command sent: " + response, Toast.LENGTH_SHORT);
+            setButtonsEnabled(true, true, true);
+        }
+    };
     // ID of the current CameraDevice
     private String mCameraId;
     // A CameraCaptureSession for camera preview.
@@ -96,71 +103,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private ImageReader mImageReader;
     // CaptureRequest.Builder for the camera preview
     private CaptureRequest.Builder mPreviewRequestBuilder;
-    // A semaphore to prevent the app from exiting before closing the camera.
-    private Semaphore mCameraOpenCloseLock = new Semaphore(1);
-    // Whether the current camera device supports Flash or not.
-    private boolean mFlashSupported;
-    // The HTTP Client used for transmitting image
-    private OkHttpClient mHttpClient;
-    // The Bosswave Client used for sending control command
-    private BosswaveClient mBosswaveClient;
-    // Whethre the Bosswave Client is connected
-    private boolean mIsBosswaveConnected;
-    // The current recognized object name
-    private String mTarget;
-    private AtomicBoolean mCaptureRequest;
-    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
-        @Override
-        public void onImageAvailable(ImageReader reader) {
-            Image image = reader.acquireLatestImage();
-            if (mCaptureRequest.getAndSet(false)) {
-                mBackgroundHandler.post(new ImageHandler(image));
-            } else {
-                image.close();
-            }
-        }
-    };
-    private final View.OnClickListener mCaptureButtonOnClickListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            Log.d(LOG_TAG, "TAG_TIME capture " + System.currentTimeMillis()); // start timing
-            if (!mCaptureRequest.getAndSet(true)) {
-                setButtonsEnabled(false, false, false);
-            } else {
-                showToast("Image capture failed. (Have you set the intrinsic parameters?)", Toast.LENGTH_SHORT);
-            }
-        }
-    };
-    private CameraCaptureSession.StateCallback mSessionStateCallback = new CameraCaptureSession.StateCallback() {
-        @Override
-        public void onConfigured(@NonNull CameraCaptureSession session) {
-            // The camera is already closed
-            if (mCameraDevice == null) {
-                return;
-            }
-
-            // When the session is ready, we start displaying the preview.
-            mCaptureSession = session;
-            try {
-                // Auto focus should be continuous for camera preview.
-                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-
-                // Flash is automatically enabled when necessary.
-                setAutoFlash(mPreviewRequestBuilder);
-
-                CaptureRequest previewRequest = mPreviewRequestBuilder.build();
-                // do not call anything
-                mCaptureSession.setRepeatingRequest(previewRequest, null, null);
-            } catch (CameraAccessException e) {
-                e.printStackTrace();
-            }
-        }
-
-        @Override
-        public void onConfigureFailed(@NonNull CameraCaptureSession session) {
-            showToast("onConfigureFailed", Toast.LENGTH_LONG);
-        }
-    };
-    private CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
+    private final CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
         @Override
         public void onOpened(@NonNull CameraDevice camera) {
             Log.i(LOG_TAG, "CameraDevice onOpened");
@@ -190,7 +133,39 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             }
         }
     };
-    private TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+    // Whether the current camera device supports Flash or not.
+    private boolean mFlashSupported;
+    private final CameraCaptureSession.StateCallback mSessionStateCallback = new CameraCaptureSession.StateCallback() {
+        @Override
+        public void onConfigured(@NonNull CameraCaptureSession session) {
+            // The camera is already closed
+            if (mCameraDevice == null) {
+                return;
+            }
+
+            // When the session is ready, we start displaying the preview.
+            mCaptureSession = session;
+            try {
+                // Auto focus should be continuous for camera preview.
+                mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
+
+                // Flash is automatically enabled when necessary.
+                setAutoFlash(mPreviewRequestBuilder);
+
+                CaptureRequest previewRequest = mPreviewRequestBuilder.build();
+                // do not call anything
+                mCaptureSession.setRepeatingRequest(previewRequest, null, null);
+            } catch (CameraAccessException e) {
+                e.printStackTrace();
+            }
+        }
+
+        @Override
+        public void onConfigureFailed(@NonNull CameraCaptureSession session) {
+            showToast("onConfigureFailed", Toast.LENGTH_LONG);
+        }
+    };
+    private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
             Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
@@ -211,7 +186,41 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         public void onSurfaceTextureUpdated(SurfaceTexture surface) {
         }
     };
-    private HttpPostImgTask.Listener mRecognitionListener = new HttpPostImgTask.Listener() {
+    // The HTTP Client used for transmitting image
+    private OkHttpClient mHttpClient;
+    // The Bosswave Client used for sending control command
+    private BosswaveClient mBosswaveClient;
+    // Whethre the Bosswave Client is connected
+    private boolean mIsBosswaveConnected;
+    private final BwCloseTask.Listener mBwCloseTaskListener = new BwCloseTask.Listener() {
+        @Override
+        public void onResponse(boolean success) {
+            if (success) {
+                showToast("Bosswave disconnected", Toast.LENGTH_SHORT);
+                mIsBosswaveConnected = false;
+                mBosswaveClient = null;
+                // always try to reconnect
+                initBosswaveClient();
+            } else {
+                showToast("Bosswave close failed", Toast.LENGTH_SHORT);
+            }
+        }
+    };
+    private final SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = new SharedPreferences.OnSharedPreferenceChangeListener() {
+        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+            // when BOSSWAVE router changes, we need to reconnect
+            if (key.equals(getString(R.string.bosswave_router_addr_key)) || key.equals(getString(R.string.bosswave_router_port_key)) || key.equals(getString(R.string.bosswave_key_base64_key))) {
+                if (mIsBosswaveConnected) {
+                    new BwCloseTask(mBosswaveClient, mBwCloseTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                } else {
+                    initBosswaveClient();
+                }
+            }
+        }
+    };
+    // The current recognized object name
+    private String mTarget;
+    private final HttpPostImgTask.Listener mRecognitionListener = new HttpPostImgTask.Listener() {
         @Override
         public void onResponse(String result) { // null means network error
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
@@ -233,7 +242,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             }
         }
     };
-    private GrpcReqImgTask.Listener mGrpcRecognitionListener = new GrpcReqImgTask.Listener() {
+    private final GrpcReqImgTask.Listener mGrpcRecognitionListener = new GrpcReqImgTask.Listener() {
         @Override
         public void onResponse(String result) { // null means network error
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
@@ -255,7 +264,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             }
         }
     };
-    private BwInitTask.Listener mBwInitTaskListener = new BwInitTask.Listener() {
+    private final BwInitTask.Listener mBwInitTaskListener = new BwInitTask.Listener() {
         @Override
         public void onResponse(boolean success, BosswaveClient client) {
             if (success) {
@@ -271,33 +280,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             }
         }
     };
-    private BwCloseTask.Listener mBwCloseTaskListener = new BwCloseTask.Listener() {
-        @Override
-        public void onResponse(boolean success) {
-            if (success) {
-                showToast("Bosswave disconnected", Toast.LENGTH_SHORT);
-                mIsBosswaveConnected = false;
-                mBosswaveClient = null;
-                // always try to reconnect
-                initBosswaveClient();
-            } else {
-                showToast("Bosswave close failed", Toast.LENGTH_SHORT);
-            }
-        }
-    };
-    private SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = new SharedPreferences.OnSharedPreferenceChangeListener() {
-        public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-            // when BOSSWAVE router changes, we need to reconnect
-            if (key.equals(getString(R.string.bosswave_router_addr_key)) || key.equals(getString(R.string.bosswave_router_port_key)) || key.equals(getString(R.string.bosswave_key_base64_key))) {
-                if (mIsBosswaveConnected) {
-                    new BwCloseTask(mBosswaveClient, mBwCloseTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-                } else {
-                    initBosswaveClient();
-                }
-            }
-        }
-    };
-    private BwPubImgTask.Listener mBwPubImgTaskListener = new BwPubImgTask.Listener() {
+    private final BwPubImgTask.Listener mBwPubImgTaskListener = new BwPubImgTask.Listener() {
         @Override
         public void onResponse(String response) {
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
@@ -319,13 +302,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             }
         }
     };
-    private BwPubCmdTask.Listener mBwPubTaskListener = new BwPubCmdTask.Listener() {
-        @Override
-        public void onResponse(String response) {
-            showToast("Control command sent: " + response, Toast.LENGTH_SHORT);
-            setButtonsEnabled(true, true, true);
-        }
-    };
     private final View.OnClickListener mOnButtonOnClickListener = new View.OnClickListener() {
         public void onClick(View v) {
             if (mIsBosswaveConnected) {
@@ -345,6 +321,28 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 new BwPubCmdTask(mBosswaveClient, topic, new byte[]{0}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } else {
                 showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
+            }
+        }
+    };
+    private AtomicBoolean mCaptureRequest;
+    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
+        @Override
+        public void onImageAvailable(ImageReader reader) {
+            Image image = reader.acquireLatestImage();
+            if (mCaptureRequest.getAndSet(false)) {
+                mBackgroundHandler.post(new ImageHandler(image));
+            } else {
+                image.close();
+            }
+        }
+    };
+    private final View.OnClickListener mCaptureButtonOnClickListener = new View.OnClickListener() {
+        public void onClick(View v) {
+            Log.d(LOG_TAG, "TAG_TIME capture " + System.currentTimeMillis()); // start timing
+            if (!mCaptureRequest.getAndSet(true)) {
+                setButtonsEnabled(false, false, false);
+            } else {
+                showToast("Image capture failed. (Have you set the intrinsic parameters?)", Toast.LENGTH_SHORT);
             }
         }
     };
@@ -719,7 +717,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         }
     }
 
-    protected void createCameraPreviewSession() {
+    private void createCameraPreviewSession() {
         try {
             SurfaceTexture texture = mTextureView.getSurfaceTexture();
             assert texture != null;

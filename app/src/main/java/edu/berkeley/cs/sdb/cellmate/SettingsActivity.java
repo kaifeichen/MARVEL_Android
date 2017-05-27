@@ -4,7 +4,6 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.preference.EditTextPreference;
 import android.preference.ListPreference;
-import android.preference.MultiSelectListPreference;
 import android.preference.Preference;
 import android.preference.PreferenceActivity;
 import android.preference.PreferenceFragment;
@@ -22,7 +21,7 @@ public class SettingsActivity extends PreferenceActivity {
     }
 
     public static class SettingsFragment extends PreferenceFragment {
-        private SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = new SharedPreferences.OnSharedPreferenceChangeListener() {
+        private final SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = new SharedPreferences.OnSharedPreferenceChangeListener() {
             public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
                 updatePrefSummary(findPreference(key));
             }
@@ -63,16 +62,12 @@ public class SettingsActivity extends PreferenceActivity {
 
         private void updatePrefSummary(Preference p) {
             if (p instanceof ListPreference) {
-                ListPreference listPref = (ListPreference) p;
-                p.setSummary(listPref.getEntry());
+                ListPreference pref = (ListPreference) p;
+                p.setSummary(pref.getEntry());
             }
             if (p instanceof EditTextPreference) {
-                EditTextPreference editTextPref = (EditTextPreference) p;
-                p.setSummary(editTextPref.getText());
-            }
-            if (p instanceof MultiSelectListPreference) {
-                EditTextPreference editTextPref = (EditTextPreference) p;
-                p.setSummary(editTextPref.getText());
+                EditTextPreference pref = (EditTextPreference) p;
+                p.setSummary(pref.getText());
             }
         }
     }
