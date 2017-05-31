@@ -20,22 +20,23 @@ import edu.berkeley.cs.sdb.bosswave.ResultHandler;
 import edu.berkeley.cs.sdb.bosswave.SubscribeRequest;
 
 
-public class BwPubImgTask extends AsyncTask<Void, Void, String> {
-    private BosswaveClient mBosswaveClient;
-    private String mTopic;
-    private Image mImage;
-    private PayloadObject.Type mType;
-    private Listener mTaskListener;
-    private Semaphore mSem;
+class BwPubImgTask extends AsyncTask<Void, Void, String> {
+    private final BosswaveClient mBosswaveClient;
+    private final String mTopic;
+    private final Image mImage;
+    private final Listener mTaskListener;
+    private final Semaphore mSem;
+    private final double mFx;
+    private final double mFy;
+    private final double mCx;
+    private final double mCy;
     private String mResult;
-    private double mFx;
-    private double mFy;
-    private double mCx;
-    private double mCy;
-
-    public interface Listener {
-        void onResponse(String response);
-    }
+    private final ResponseHandler mResponseHandler = new ResponseHandler() {
+        @Override
+        public void onResponseReceived(BosswaveResponse response) {
+            mResult = response.getStatus();
+        }
+    };
 
     public BwPubImgTask(BosswaveClient bosswaveClient, String topic, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mBosswaveClient = bosswaveClient;
@@ -48,34 +49,6 @@ public class BwPubImgTask extends AsyncTask<Void, Void, String> {
         mTaskListener = listener;
         mSem = new Semaphore(0);
     }
-
-    private ResponseHandler mResponseHandler = new ResponseHandler() {
-        @Override
-        public void onResponseReceived(BosswaveResponse response) {
-            mResult = response.getStatus();
-        }
-    };
-
-
-    private class ResponseErrorHandler implements ResponseHandler {
-        @Override
-        public void onResponseReceived(BosswaveResponse resp) {
-            if (!resp.getStatus().equals("okay")) {
-                throw new RuntimeException(resp.getReason());
-            }
-        }
-    }
-
-    private class TextResultHandler implements ResultHandler {
-        @Override
-        public void onResultReceived(BosswaveResult rslt) {
-            byte[] messageContent = rslt.getPayloadObjects().get(0).getContent();
-            String msg = new String(messageContent, StandardCharsets.UTF_8);
-            mResult = msg;
-            mSem.release();
-        }
-    }
-
 
     @Override
     protected String doInBackground(Void... voids) {
@@ -133,5 +106,27 @@ public class BwPubImgTask extends AsyncTask<Void, Void, String> {
     @Override
     protected void onPostExecute(String response) {
         mTaskListener.onResponse(response);
+    }
+
+    public interface Listener {
+        void onResponse(String response);
+    }
+
+    private class ResponseErrorHandler implements ResponseHandler {
+        @Override
+        public void onResponseReceived(BosswaveResponse resp) {
+            if (!resp.getStatus().equals("okay")) {
+                throw new RuntimeException(resp.getReason());
+            }
+        }
+    }
+
+    private class TextResultHandler implements ResultHandler {
+        @Override
+        public void onResultReceived(BosswaveResult rslt) {
+            byte[] messageContent = rslt.getPayloadObjects().get(0).getContent();
+            mResult = new String(messageContent, StandardCharsets.UTF_8);
+            mSem.release();
+        }
     }
 }

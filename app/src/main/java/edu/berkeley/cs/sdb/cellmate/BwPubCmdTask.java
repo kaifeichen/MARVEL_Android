@@ -6,24 +6,27 @@ import java.io.IOException;
 import java.util.concurrent.Semaphore;
 
 import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
+import edu.berkeley.cs.sdb.bosswave.BosswaveResponse;
 import edu.berkeley.cs.sdb.bosswave.ChainElaborationLevel;
 import edu.berkeley.cs.sdb.bosswave.PayloadObject;
 import edu.berkeley.cs.sdb.bosswave.PublishRequest;
-import edu.berkeley.cs.sdb.bosswave.BosswaveResponse;
 import edu.berkeley.cs.sdb.bosswave.ResponseHandler;
 
-public class BwPubCmdTask extends AsyncTask<Void, Void, String> {
-    private BosswaveClient mBosswaveClient;
-    private String mTopic;
-    private byte[] mData;
-    private PayloadObject.Type mType;
-    private Listener mTaskListener;
-    private Semaphore mSem;
+class BwPubCmdTask extends AsyncTask<Void, Void, String> {
+    private final BosswaveClient mBosswaveClient;
+    private final String mTopic;
+    private final byte[] mData;
+    private final PayloadObject.Type mType;
+    private final Listener mTaskListener;
+    private final Semaphore mSem;
     private String mResult;
-
-    public interface Listener {
-        void onResponse(String response);
-    }
+    private final ResponseHandler mResponseHandler = new ResponseHandler() {
+        @Override
+        public void onResponseReceived(BosswaveResponse response) {
+            mResult = response.getStatus();
+            mSem.release();
+        }
+    };
 
     public BwPubCmdTask(BosswaveClient bosswaveClient, String topic, byte[] data, PayloadObject.Type type, Listener listener) {
         mBosswaveClient = bosswaveClient;
@@ -33,16 +36,6 @@ public class BwPubCmdTask extends AsyncTask<Void, Void, String> {
         mTaskListener = listener;
         mSem = new Semaphore(0);
     }
-
-    private ResponseHandler mResponseHandler = new ResponseHandler() {
-        @Override
-        public void onResponseReceived(BosswaveResponse response) {
-            mResult = response.getStatus();
-            mSem.release();
-        }
-    };
-
-
 
     @Override
     protected String doInBackground(Void... voids) {
@@ -72,5 +65,9 @@ public class BwPubCmdTask extends AsyncTask<Void, Void, String> {
     @Override
     protected void onPostExecute(String response) {
         mTaskListener.onResponse(response);
+    }
+
+    public interface Listener {
+        void onResponse(String response);
     }
 }

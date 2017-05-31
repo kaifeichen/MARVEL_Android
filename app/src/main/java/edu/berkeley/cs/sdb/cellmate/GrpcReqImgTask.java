@@ -13,24 +13,15 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 
 
-public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
-    private static final String LOG_TAG = "cellmate";
-
-
-    private ManagedChannel mChannel;
-
-    private String mHost;
-    private int mPort;
-    private Image mImage;
-    private double mFx;
-    private double mFy;
-    private double mCx;
-    private double mCy;
-    private Listener mListener;
-
-    public interface Listener {
-        void onResponse(String result); // null means network error
-    }
+class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
+    private final String mHost;
+    private final int mPort;
+    private final Image mImage;
+    private final double mFx;
+    private final double mFy;
+    private final double mCx;
+    private final double mCy;
+    private final Listener mListener;
 
     public GrpcReqImgTask(String host, int port, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mHost = host;
@@ -51,8 +42,8 @@ public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
         buffer.get(bytes);
         mImage.close();
         try {
-            mChannel = ManagedChannelBuilder.forAddress(mHost, mPort).usePlaintext(true).build();
-            GrpcServiceGrpc.GrpcServiceBlockingStub mStub = GrpcServiceGrpc.newBlockingStub(mChannel);
+            ManagedChannel channel = ManagedChannelBuilder.forAddress(mHost, mPort).usePlaintext(true).build();
+            GrpcServiceGrpc.GrpcServiceBlockingStub mStub = GrpcServiceGrpc.newBlockingStub(channel);
             CellmateProto.ClientQueryMessage request = CellmateProto.ClientQueryMessage.newBuilder()
                     .setImage(ByteString.copyFrom(bytes))
                     .setFx(mFx)
@@ -73,5 +64,9 @@ public class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
     @Override
     protected void onPostExecute(String result) {
         mListener.onResponse(result);
+    }
+
+    public interface Listener {
+        void onResponse(String result); // null means network error
     }
 }

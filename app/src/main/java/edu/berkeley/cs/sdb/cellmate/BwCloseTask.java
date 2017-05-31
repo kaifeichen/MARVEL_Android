@@ -6,13 +6,9 @@ import java.io.IOException;
 
 import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
 
-public class BwCloseTask extends AsyncTask<Void, Void, Boolean> {
-    private BosswaveClient mBosswaveClient;
-    private Listener mTaskListener;
-
-    public interface Listener {
-        void onResponse(boolean success);
-    }
+class BwCloseTask extends AsyncTask<Void, Void, Boolean> {
+    private final BosswaveClient mBosswaveClient;
+    private final Listener mTaskListener;
 
     public BwCloseTask(BosswaveClient bosswaveClient, Listener listener) {
         mBosswaveClient = bosswaveClient;
@@ -33,5 +29,9 @@ public class BwCloseTask extends AsyncTask<Void, Void, Boolean> {
     @Override
     protected void onPostExecute(Boolean success) {
         mTaskListener.onResponse(success);
+    }
+
+    public interface Listener {
+        void onResponse(boolean success);
     }
 }

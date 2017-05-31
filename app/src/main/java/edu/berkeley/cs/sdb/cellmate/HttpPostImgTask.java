@@ -6,7 +6,6 @@ import android.util.Log;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.text.SimpleDateFormat;
 import java.util.Date;
 
 import okhttp3.MediaType;
@@ -16,21 +15,19 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 
-public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
+import static java.text.DateFormat.getDateTimeInstance;
+
+class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     private static final String LOG_TAG = "cellmate";
 
-    private OkHttpClient mHttpClient;
-    private String mUrl;
-    private Image mImage;
-    private double mFx;
-    private double mFy;
-    private double mCx;
-    private double mCy;
-    private Listener mListener;
-
-    public interface Listener {
-        void onResponse(String result); // null means network error
-    }
+    private final OkHttpClient mHttpClient;
+    private final String mUrl;
+    private final Image mImage;
+    private final double mFx;
+    private final double mFy;
+    private final double mCx;
+    private final double mCy;
+    private final Listener mListener;
 
     public HttpPostImgTask(OkHttpClient httpClient, String url, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mHttpClient = httpClient;
@@ -45,7 +42,7 @@ public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
 
     @Override
     protected String doInBackground(Void... voids) {
-        String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+        String timeStamp = getDateTimeInstance().format(new Date());
         ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
         byte[] bytes = new byte[buffer.remaining()];
         buffer.get(bytes);
@@ -81,5 +78,9 @@ public class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     @Override
     protected void onPostExecute(String result) {
         mListener.onResponse(result);
+    }
+
+    public interface Listener {
+        void onResponse(String result); // null means network error
     }
 }
