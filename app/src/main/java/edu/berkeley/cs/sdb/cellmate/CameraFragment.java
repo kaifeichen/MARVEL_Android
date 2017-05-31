@@ -818,7 +818,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     /**
      * Compares two {@code Size}s based on their areas.
      */
-    static class CompareSizesByArea implements Comparator<Size> {
+    private static class CompareSizesByArea implements Comparator<Size> {
 
         @Override
         public int compare(Size lhs, Size rhs) {
@@ -836,7 +836,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         private final double mCx;
         private final double mCy;
 
-        public ImageHandler(Image image) {
+        private ImageHandler(Image image) {
             mImage = image;
 
             Activity activity = getActivity();
@@ -873,7 +873,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         private final double mCx;
         private final double mCy;
 
-        public HttpPostImageRunnable(Image image, double fx, double fy, double cx, double cy) {
+        private HttpPostImageRunnable(Image image, double fx, double fy, double cx, double cy) {
             mImage = image;
             mFx = fx;
             mFy = fy;
@@ -902,7 +902,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         private final double mCx;
         private final double mCy;
 
-        public BWPublishImageRunnable(Image image, double fx, double fy, double cx, double cy) {
+        private BWPublishImageRunnable(Image image, double fx, double fy, double cx, double cy) {
             mImage = image;
             mFx = fx;
             mFy = fy;
@@ -929,7 +929,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         private final double mCx;
         private final double mCy;
 
-        public GrpcPostImageRunnable(Image image, double fx, double fy, double cx, double cy) {
+        private GrpcPostImageRunnable(Image image, double fx, double fy, double cx, double cy) {
             mImage = image;
             mFx = fx;
             mFy = fy;
