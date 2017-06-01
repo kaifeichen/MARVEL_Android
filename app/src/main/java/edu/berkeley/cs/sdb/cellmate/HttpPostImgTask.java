@@ -1,8 +1,10 @@
 package edu.berkeley.cs.sdb.cellmate;
 
+import android.content.Context;
 import android.media.Image;
 import android.os.AsyncTask;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -20,6 +22,7 @@ import static java.text.DateFormat.getDateTimeInstance;
 class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     private static final String LOG_TAG = "cellmate";
 
+    private final Context mContext;
     private final OkHttpClient mHttpClient;
     private final String mUrl;
     private final Image mImage;
@@ -28,8 +31,10 @@ class HttpPostImgTask extends AsyncTask<Void, Void, String> {
     private final double mCx;
     private final double mCy;
     private final Listener mListener;
+    private Exception mException;
 
-    public HttpPostImgTask(OkHttpClient httpClient, String url, Image image, double fx, double fy, double cx, double cy, Listener listener) {
+    public HttpPostImgTask(Context context, OkHttpClient httpClient, String url, Image image, double fx, double fy, double cx, double cy, Listener listener) {
+        mContext = context;
         mHttpClient = httpClient;
         mUrl = url;
         mImage = image;
@@ -38,6 +43,7 @@ class HttpPostImgTask extends AsyncTask<Void, Void, String> {
         mCx = cx;
         mCy = cy;
         mListener = listener;
+        mException = null;
     }
 
     @Override
@@ -70,6 +76,7 @@ class HttpPostImgTask extends AsyncTask<Void, Void, String> {
             }
         } catch (IOException e) {
             e.printStackTrace();
+            mException = e;
         }
 
         return result; // null means network error
@@ -77,6 +84,10 @@ class HttpPostImgTask extends AsyncTask<Void, Void, String> {
 
     @Override
     protected void onPostExecute(String result) {
+        if (mException != null && mException instanceof IOException) {
+            // onPostExecute is called on the UI/main thread
+            Toast.makeText(mContext, "Network Error", Toast.LENGTH_LONG);
+        }
         mListener.onResponse(result);
     }
 

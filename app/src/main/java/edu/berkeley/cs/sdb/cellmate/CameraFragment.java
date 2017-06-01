@@ -57,7 +57,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
@@ -74,6 +76,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
+    private final int CIRCULAR_ARRAY_LENGTH = 10;
     private AutoFitTextureView mTextureView;
     private TextView mTextView;
     private Button mOnButton;
@@ -222,46 +225,24 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         }
     };
     // The current recognized object name
-    private String mTarget;
-    private final HttpPostImgTask.Listener mRecognitionListener = new HttpPostImgTask.Listener() {
-        @Override
-        public void onResponse(String result) { // null means network error
-            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
-            if (result == null) {
-                showToast("Network error", Toast.LENGTH_SHORT);
-                mTarget = null;
-                mTextView.setText(getString(R.string.none));
-                setButtonsEnabled(false, false);
-            } else if (result.trim().equals("None")) {
-                showToast("Nothing recognized", Toast.LENGTH_SHORT);
-                mTarget = null;
-                mTextView.setText(getString(R.string.none));
-                setButtonsEnabled(false, false);
-            } else {
-                showToast(result + " recognized", Toast.LENGTH_SHORT);
-                mTarget = result.trim();
-                mTextView.setText(result);
-                setButtonsEnabled(true, true);
-            }
-        }
-    };
+    private String mTargetObject;
     private final GrpcReqImgTask.Listener mGrpcRecognitionListener = new GrpcReqImgTask.Listener() {
         @Override
         public void onResponse(String result) { // null means network error
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
             if (result == null) {
                 showToast("Network error", Toast.LENGTH_SHORT);
-                mTarget = null;
+                mTargetObject = null;
                 mTextView.setText(getString(R.string.none));
                 setButtonsEnabled(false, false);
             } else if (result.trim().equals("None")) {
                 showToast("Nothing recognized", Toast.LENGTH_SHORT);
-                mTarget = null;
+                mTargetObject = null;
                 mTextView.setText(getString(R.string.none));
                 setButtonsEnabled(false, false);
             } else {
                 showToast(result + " recognized", Toast.LENGTH_SHORT);
-                mTarget = result.trim();
+                mTargetObject = result.trim();
                 mTextView.setText(result);
                 setButtonsEnabled(true, true);
             }
@@ -274,7 +255,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 showToast("Bosswave connected", Toast.LENGTH_SHORT);
                 mBosswaveClient = client;
                 mIsBosswaveConnected = true;
-                if (mTarget != null) {
+                if (mTargetObject != null) {
                     setButtonsEnabled(true, true);
                 }
             } else {
@@ -289,17 +270,17 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
             if (response == null) {
                 showToast("Network error", Toast.LENGTH_SHORT);
-                mTarget = null;
+                mTargetObject = null;
                 mTextView.setText(getString(R.string.none));
                 setButtonsEnabled(false, false);
             } else if (response.trim().equals("None")) {
                 showToast("Nothing recognized", Toast.LENGTH_SHORT);
-                mTarget = null;
+                mTargetObject = null;
                 mTextView.setText(getString(R.string.none));
                 setButtonsEnabled(false, false);
             } else {
                 showToast(response + " recognized", Toast.LENGTH_SHORT);
-                mTarget = response.trim();
+                mTargetObject = response.trim();
                 mTextView.setText(response);
                 setButtonsEnabled(true, true);
             }
@@ -309,7 +290,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         public void onClick(View v) {
             if (mIsBosswaveConnected) {
                 setButtonsEnabled(false, false);
-                String topic = CONTROL_TOPIC_PREFIX + mTarget + CONTROL_TOPIC_SUFFIX;
+                String topic = CONTROL_TOPIC_PREFIX + mTargetObject + CONTROL_TOPIC_SUFFIX;
                 new BwPubCmdTask(mBosswaveClient, topic, new byte[]{1}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } else {
                 showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
@@ -320,13 +301,55 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         public void onClick(View v) {
             if (mIsBosswaveConnected) {
                 setButtonsEnabled(false, false);
-                String topic = CONTROL_TOPIC_PREFIX + mTarget + CONTROL_TOPIC_SUFFIX;
+                String topic = CONTROL_TOPIC_PREFIX + mTargetObject + CONTROL_TOPIC_SUFFIX;
                 new BwPubCmdTask(mBosswaveClient, topic, new byte[]{0}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } else {
                 showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
             }
         }
     };
+    private int mNextObjectIndex;
+    private List<String> mRecentObjects;
+    private final HttpPostImgTask.Listener mRecognitionListener = new HttpPostImgTask.Listener() {
+        @Override
+        public void onResponse(String result) { // null means network error
+            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
+            mRecentObjects.add(mNextObjectIndex % CIRCULAR_ARRAY_LENGTH, result.trim());
+            mTargetObject = findCommon(mRecentObjects);
+            if (result == null) {
+                showToast("Network error", Toast.LENGTH_SHORT);
+            }
+
+            if (mTargetObject == null || mTargetObject.equals("None")) {
+                mTargetObject = null;
+                mTextView.setText(getString(R.string.none));
+                setButtonsEnabled(false, false);
+            } else {
+                showToast(result + " recognized", Toast.LENGTH_SHORT);
+                mTextView.setText(mTargetObject);
+                setButtonsEnabled(true, true);
+            }
+        }
+    };
+
+    private static String findCommon(List<String> objects) {
+        Map<String, Integer> map = new HashMap<>();
+
+        for (String obj : objects) {
+            Integer val = map.get(obj);
+            map.put(obj, val == null ? 1 : val + 1);
+        }
+
+        Map.Entry<String, Integer> max = null;
+
+        for (Map.Entry<String, Integer> e : map.entrySet()) {
+            if (max == null || e.getValue() >= max.getValue()) {
+                max = e;
+            }
+        }
+
+        return max.getKey();
+    }
 
     public static CameraFragment newInstance() {
         return new CameraFragment();
@@ -414,6 +437,10 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         mBosswaveClient = null;
         initBosswaveClient();
 
+        mTargetObject = null;
+        mNextObjectIndex = 0;
+        mRecentObjects = new ArrayList<>(CIRCULAR_ARRAY_LENGTH);
+
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
         preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
 
@@ -425,8 +452,8 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         super.onResume();
         startBackgroundThread();
 
-        if (mTarget != null) {
-            mTextView.setText(mTarget);
+        if (mTargetObject != null) {
+            mTextView.setText(mTargetObject);
         } else {
             mTextView.setText(getString(R.string.none));
         }
@@ -868,7 +895,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
                 String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
                 String imagePostUrl = "http://" + cellmateServerAddr + ":" + cellmateServerPort + "/";
-                new HttpPostImgTask(mHttpClient, imagePostUrl, mImage, mFx, mFy, mCx, mCy, mRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new HttpPostImgTask(getActivity(), mHttpClient, imagePostUrl, mImage, mFx, mFy, mCx, mCy, mRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -923,7 +950,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
                 String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
                 String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
-                new GrpcReqImgTask(cellmateServerAddr, Integer.valueOf(cellmateServerPort), mImage, mFx, mFy, mCx, mCy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new GrpcReqImgTask(getActivity(), cellmateServerAddr, Integer.valueOf(cellmateServerPort), mImage, mFx, mFy, mCx, mCy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
