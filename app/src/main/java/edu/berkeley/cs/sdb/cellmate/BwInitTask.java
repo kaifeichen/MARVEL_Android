@@ -40,7 +40,6 @@ class BwInitTask extends AsyncTask<Void, Void, Boolean> {
         mSuccess = new AtomicBoolean(false);
         mBosswaveRouterAddr = bosswaveRouterAddr;
         mBbosswaveRouterPort = bosswaveRouterPort;
-        System.out.println("bowsss wave inite ");
 
     }
 
