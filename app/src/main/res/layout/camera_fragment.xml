@@ -37,25 +37,16 @@
         android:layout_alignTop="@+id/off"
         android:layout_gravity="center"
         android:layout_toStartOf="@+id/off"
-        android:text="@string/on"/>
+        android:text="@string/on" />
 
     <Button
         android:id="@+id/off"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_alignTop="@+id/capture"
-        android:layout_gravity="center"
-        android:layout_toStartOf="@+id/capture"
-        android:text="@string/off"/>
-
-    <Button
-        android:id="@+id/capture"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
         android:layout_alignParentEnd="true"
         android:layout_gravity="center"
-        android:text="@string/capture"/>
+        android:text="@string/off" />
 
 
 </RelativeLayout>

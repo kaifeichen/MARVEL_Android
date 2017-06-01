@@ -1,8 +1,10 @@
 package edu.berkeley.cs.sdb.cellmate;
 
 
+import android.content.Context;
 import android.media.Image;
 import android.os.AsyncTask;
+import android.widget.Toast;
 
 import com.google.protobuf.ByteString;
 
@@ -14,6 +16,7 @@ import io.grpc.StatusRuntimeException;
 
 
 class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
+    private final Context mContext;
     private final String mHost;
     private final int mPort;
     private final Image mImage;
@@ -22,8 +25,10 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
     private final double mCx;
     private final double mCy;
     private final Listener mListener;
+    private Exception mException;
 
-    public GrpcReqImgTask(String host, int port, Image image, double fx, double fy, double cx, double cy, Listener listener) {
+    public GrpcReqImgTask(Context context, String host, int port, Image image, double fx, double fy, double cx, double cy, Listener listener) {
+        mContext = context;
         mHost = host;
         mPort = port;
         mImage = image;
@@ -32,6 +37,7 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
         mCx = cx;
         mCy = cy;
         mListener = listener;
+        mException = null;
     }
 
     @Override
@@ -57,12 +63,17 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
             result = response.getFoundName();
         } catch (StatusRuntimeException e) {
             e.printStackTrace();
+            mException = e;
         }
         return result; // null means network error
     }
 
     @Override
     protected void onPostExecute(String result) {
+        if (mException != null && mException instanceof StatusRuntimeException) {
+            // onPostExecute is called on the UI/main thread
+            Toast.makeText(mContext, "Network Error", Toast.LENGTH_LONG);
+        }
         mListener.onResponse(result);
     }
 

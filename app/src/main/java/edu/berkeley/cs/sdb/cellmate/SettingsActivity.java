@@ -21,11 +21,7 @@ public class SettingsActivity extends PreferenceActivity {
     }
 
     public static class SettingsFragment extends PreferenceFragment {
-        private final SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = new SharedPreferences.OnSharedPreferenceChangeListener() {
-            public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
-                updatePrefSummary(findPreference(key));
-            }
-        };
+        private final SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = (SharedPreferences sharedPreferences, String key) -> updatePrefSummary(findPreference(key));
 
         @Override
         public void onCreate(Bundle savedInstanceState) {

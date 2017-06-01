@@ -57,10 +57,11 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
 import edu.berkeley.cs.sdb.bosswave.PayloadObject;
@@ -75,18 +76,11 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
+    private final int CIRCULAR_ARRAY_LENGTH = 10;
     private AutoFitTextureView mTextureView;
     private TextView mTextView;
     private Button mOnButton;
     private Button mOffButton;
-    private Button mCaptureButton;
-    private final BwPubCmdTask.Listener mBwPubTaskListener = new BwPubCmdTask.Listener() {
-        @Override
-        public void onResponse(String response) {
-            showToast("Control command sent: " + response, Toast.LENGTH_SHORT);
-            setButtonsEnabled(true, true, true);
-        }
-    };
     // ID of the current CameraDevice
     private String mCameraId;
     // A CameraCaptureSession for camera preview.
@@ -99,12 +93,75 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private HandlerThread mBackgroundThread;
     // A Handler for running tasks in the background.
     private Handler mBackgroundHandler;
+    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
+        @Override
+        public void onImageAvailable(ImageReader reader) {
+            mBackgroundHandler.post(new ImageHandler(reader.acquireNextImage()));
+        }
+    };
     // An ImageReader that handles still image capture.
     private ImageReader mImageReader;
     // CaptureRequest.Builder for the camera preview
     private CaptureRequest.Builder mPreviewRequestBuilder;
+    private final CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
+        @Override
+        public void onOpened(@NonNull CameraDevice camera) {
+            Log.i(LOG_TAG, "CameraDevice onOpened");
+            mCameraOpenCloseLock.release();
+            mCameraDevice = camera;
+            createCameraPreviewSession();
+            setButtonsEnabled(false, false);
+        }
+
+        @Override
+        public void onDisconnected(@NonNull CameraDevice camera) {
+            Log.i(LOG_TAG, "CameraDevice onDisconnected");
+            mCameraOpenCloseLock.release();
+            camera.close();
+            mCameraDevice = null;
+        }
+
+        @Override
+        public void onError(@NonNull CameraDevice camera, int error) {
+            Log.i(LOG_TAG, "CameraDevice onError");
+            mCameraOpenCloseLock.release();
+            camera.close();
+            mCameraDevice = null;
+            Activity activity = getActivity();
+            if (activity != null) {
+                activity.finish();
+            }
+        }
+    };
     // Whether the current camera device supports Flash or not.
     private boolean mFlashSupported;
+    private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+        @Override
+        public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
+            Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
+            openCamera(width, height);
+        }
+
+        @Override
+        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
+            configureTransform(width, height);
+        }
+
+        @Override
+        public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+            return true;
+        }
+
+        @Override
+        public void onSurfaceTextureUpdated(SurfaceTexture surface) {
+        }
+    };
+    // We keep a toast reference so it can be updated instantly
+    private Toast mToast;
+    private final BwPubCmdTask.Listener mBwPubTaskListener = (String response) -> {
+        showToast("Control command sent: " + response, Toast.LENGTH_SHORT);
+        setButtonsEnabled(true, true);
+    };
     private final CameraCaptureSession.StateCallback mSessionStateCallback = new CameraCaptureSession.StateCallback() {
         @Override
         public void onConfigured(@NonNull CameraCaptureSession session) {
@@ -135,104 +192,12 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             showToast("onConfigureFailed", Toast.LENGTH_LONG);
         }
     };
-    private final CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
-        @Override
-        public void onOpened(@NonNull CameraDevice camera) {
-            Log.i(LOG_TAG, "CameraDevice onOpened");
-            mCameraOpenCloseLock.release();
-            mCameraDevice = camera;
-            createCameraPreviewSession();
-            setButtonsEnabled(false, false, true);
-        }
-
-        @Override
-        public void onDisconnected(@NonNull CameraDevice camera) {
-            Log.i(LOG_TAG, "CameraDevice onDisconnected");
-            mCameraOpenCloseLock.release();
-            camera.close();
-            mCameraDevice = null;
-        }
-
-        @Override
-        public void onError(@NonNull CameraDevice camera, int error) {
-            Log.i(LOG_TAG, "CameraDevice onError");
-            mCameraOpenCloseLock.release();
-            camera.close();
-            mCameraDevice = null;
-            Activity activity = getActivity();
-            if (activity != null) {
-                activity.finish();
-            }
-        }
-    };
     // The HTTP Client used for transmitting image
     private OkHttpClient mHttpClient;
     // The Bosswave Client used for sending control command
     private BosswaveClient mBosswaveClient;
     // Whethre the Bosswave Client is connected
     private boolean mIsBosswaveConnected;
-    // The current recognized object name
-    private String mTarget;
-    private final HttpPostImgTask.Listener mRecognitionListener = new HttpPostImgTask.Listener() {
-        @Override
-        public void onResponse(String result) { // null means network error
-            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
-            if (result == null) {
-                showToast("Network error", Toast.LENGTH_SHORT);
-                mTarget = null;
-                mTextView.setText(getString(R.string.none));
-                setButtonsEnabled(false, false, true);
-            } else if (result.trim().equals("None")) {
-                showToast("Nothing recognized", Toast.LENGTH_SHORT);
-                mTarget = null;
-                mTextView.setText(getString(R.string.none));
-                setButtonsEnabled(false, false, true);
-            } else {
-                showToast(result + " recognized", Toast.LENGTH_SHORT);
-                mTarget = result.trim();
-                mTextView.setText(result);
-                setButtonsEnabled(true, true, true);
-            }
-        }
-    };
-    private final GrpcReqImgTask.Listener mGrpcRecognitionListener = new GrpcReqImgTask.Listener() {
-        @Override
-        public void onResponse(String result) { // null means network error
-            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
-            if (result == null) {
-                showToast("Network error", Toast.LENGTH_SHORT);
-                mTarget = null;
-                mTextView.setText(getString(R.string.none));
-                setButtonsEnabled(false, false, true);
-            } else if (result.trim().equals("None")) {
-                showToast("Nothing recognized", Toast.LENGTH_SHORT);
-                mTarget = null;
-                mTextView.setText(getString(R.string.none));
-                setButtonsEnabled(false, false, true);
-            } else {
-                showToast(result + " recognized", Toast.LENGTH_SHORT);
-                mTarget = result.trim();
-                mTextView.setText(result);
-                setButtonsEnabled(true, true, true);
-            }
-        }
-    };
-    private final BwInitTask.Listener mBwInitTaskListener = new BwInitTask.Listener() {
-        @Override
-        public void onResponse(boolean success, BosswaveClient client) {
-            if (success) {
-                showToast("Bosswave connected", Toast.LENGTH_SHORT);
-                mBosswaveClient = client;
-                mIsBosswaveConnected = true;
-                if (mTarget != null) {
-                    setButtonsEnabled(true, true, true);
-                }
-            } else {
-                mBosswaveClient = null;
-                showToast("Bosswave connection failed", Toast.LENGTH_SHORT);
-            }
-        }
-    };
     private final BwCloseTask.Listener mBwCloseTaskListener = new BwCloseTask.Listener() {
         @Override
         public void onResponse(boolean success) {
@@ -259,33 +224,73 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             }
         }
     };
+    // The current recognized object name
+    private String mTargetObject;
+    private final GrpcReqImgTask.Listener mGrpcRecognitionListener = new GrpcReqImgTask.Listener() {
+        @Override
+        public void onResponse(String result) { // null means network error
+            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
+            if (result == null) {
+                showToast("Network error", Toast.LENGTH_SHORT);
+                mTargetObject = null;
+                mTextView.setText(getString(R.string.none));
+                setButtonsEnabled(false, false);
+            } else if (result.trim().equals("None")) {
+                showToast("Nothing recognized", Toast.LENGTH_SHORT);
+                mTargetObject = null;
+                mTextView.setText(getString(R.string.none));
+                setButtonsEnabled(false, false);
+            } else {
+                showToast(result + " recognized", Toast.LENGTH_SHORT);
+                mTargetObject = result.trim();
+                mTextView.setText(result);
+                setButtonsEnabled(true, true);
+            }
+        }
+    };
+    private final BwInitTask.Listener mBwInitTaskListener = new BwInitTask.Listener() {
+        @Override
+        public void onResponse(boolean success, BosswaveClient client) {
+            if (success) {
+                showToast("Bosswave connected", Toast.LENGTH_SHORT);
+                mBosswaveClient = client;
+                mIsBosswaveConnected = true;
+                if (mTargetObject != null) {
+                    setButtonsEnabled(true, true);
+                }
+            } else {
+                mBosswaveClient = null;
+                showToast("Bosswave connection failed", Toast.LENGTH_SHORT);
+            }
+        }
+    };
     private final BwPubImgTask.Listener mBwPubImgTaskListener = new BwPubImgTask.Listener() {
         @Override
         public void onResponse(String response) {
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
             if (response == null) {
                 showToast("Network error", Toast.LENGTH_SHORT);
-                mTarget = null;
+                mTargetObject = null;
                 mTextView.setText(getString(R.string.none));
-                setButtonsEnabled(false, false, true);
+                setButtonsEnabled(false, false);
             } else if (response.trim().equals("None")) {
                 showToast("Nothing recognized", Toast.LENGTH_SHORT);
-                mTarget = null;
+                mTargetObject = null;
                 mTextView.setText(getString(R.string.none));
-                setButtonsEnabled(false, false, true);
+                setButtonsEnabled(false, false);
             } else {
                 showToast(response + " recognized", Toast.LENGTH_SHORT);
-                mTarget = response.trim();
+                mTargetObject = response.trim();
                 mTextView.setText(response);
-                setButtonsEnabled(true, true, true);
+                setButtonsEnabled(true, true);
             }
         }
     };
     private final View.OnClickListener mOnButtonOnClickListener = new View.OnClickListener() {
         public void onClick(View v) {
             if (mIsBosswaveConnected) {
-                setButtonsEnabled(false, false, false);
-                String topic = CONTROL_TOPIC_PREFIX + mTarget + CONTROL_TOPIC_SUFFIX;
+                setButtonsEnabled(false, false);
+                String topic = CONTROL_TOPIC_PREFIX + mTargetObject + CONTROL_TOPIC_SUFFIX;
                 new BwPubCmdTask(mBosswaveClient, topic, new byte[]{1}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } else {
                 showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
@@ -295,57 +300,56 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private final View.OnClickListener mOffButtonOnClickListener = new View.OnClickListener() {
         public void onClick(View v) {
             if (mIsBosswaveConnected) {
-                setButtonsEnabled(false, false, false);
-                String topic = CONTROL_TOPIC_PREFIX + mTarget + CONTROL_TOPIC_SUFFIX;
+                setButtonsEnabled(false, false);
+                String topic = CONTROL_TOPIC_PREFIX + mTargetObject + CONTROL_TOPIC_SUFFIX;
                 new BwPubCmdTask(mBosswaveClient, topic, new byte[]{0}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } else {
                 showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
             }
         }
     };
-    private AtomicBoolean mCaptureRequest;
-    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
+    private int mNextObjectIndex;
+    private List<String> mRecentObjects;
+    private final HttpPostImgTask.Listener mRecognitionListener = new HttpPostImgTask.Listener() {
         @Override
-        public void onImageAvailable(ImageReader reader) {
-            Image image = reader.acquireLatestImage();
-            if (mCaptureRequest.getAndSet(false)) {
-                mBackgroundHandler.post(new ImageHandler(image));
+        public void onResponse(String result) { // null means network error
+            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
+            mRecentObjects.add(mNextObjectIndex % CIRCULAR_ARRAY_LENGTH, result.trim());
+            mTargetObject = findCommon(mRecentObjects);
+            if (result == null) {
+                showToast("Network error", Toast.LENGTH_SHORT);
+            }
+
+            if (mTargetObject == null || mTargetObject.equals("None")) {
+                mTargetObject = null;
+                mTextView.setText(getString(R.string.none));
+                setButtonsEnabled(false, false);
             } else {
-                image.close();
+                showToast(result + " recognized", Toast.LENGTH_SHORT);
+                mTextView.setText(mTargetObject);
+                setButtonsEnabled(true, true);
             }
         }
     };
-    private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
-        @Override
-        public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-            Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
-            openCamera(width, height);
+
+    private static String findCommon(List<String> objects) {
+        Map<String, Integer> map = new HashMap<>();
+
+        for (String obj : objects) {
+            Integer val = map.get(obj);
+            map.put(obj, val == null ? 1 : val + 1);
         }
 
-        @Override
-        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-            configureTransform(width, height);
-        }
+        Map.Entry<String, Integer> max = null;
 
-        @Override
-        public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-            return true;
-        }
-
-        @Override
-        public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-        }
-    };
-    private final View.OnClickListener mCaptureButtonOnClickListener = new View.OnClickListener() {
-        public void onClick(View v) {
-            Log.d(LOG_TAG, "TAG_TIME capture " + System.currentTimeMillis()); // start timing
-            if (!mCaptureRequest.getAndSet(true)) {
-                setButtonsEnabled(false, false, false);
-            } else {
-                showToast("Image capture failed. (Have you set the intrinsic parameters?)", Toast.LENGTH_SHORT);
+        for (Map.Entry<String, Integer> e : map.entrySet()) {
+            if (max == null || e.getValue() >= max.getValue()) {
+                max = e;
             }
         }
-    };
+
+        return max.getKey();
+    }
 
     public static CameraFragment newInstance() {
         return new CameraFragment();
@@ -410,12 +414,11 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         mOnButton.setOnClickListener(mOnButtonOnClickListener);
         mOffButton = (Button) view.findViewById(R.id.off);
         mOffButton.setOnClickListener(mOffButtonOnClickListener);
-        mCaptureButton = (Button) view.findViewById(R.id.capture);
-        mCaptureButton.setOnClickListener(mCaptureButtonOnClickListener);
 
-        mCaptureRequest = new AtomicBoolean(false);
-        setButtonsEnabled(false, false, false);
+        setButtonsEnabled(false, false);
         setHasOptionsMenu(true);
+
+        mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
 
         // hide action bar
         ActionBar actionBar = ((AppCompatActivity) getActivity()).getSupportActionBar();
@@ -434,6 +437,10 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         mBosswaveClient = null;
         initBosswaveClient();
 
+        mTargetObject = null;
+        mNextObjectIndex = 0;
+        mRecentObjects = new ArrayList<>(CIRCULAR_ARRAY_LENGTH);
+
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
         preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
 
@@ -445,8 +452,8 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         super.onResume();
         startBackgroundThread();
 
-        if (mTarget != null) {
-            mTextView.setText(mTarget);
+        if (mTargetObject != null) {
+            mTextView.setText(mTargetObject);
         } else {
             mTextView.setText(getString(R.string.none));
         }
@@ -516,6 +523,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 tempKeyFile.deleteOnExit();
                 FileOutputStream fos = new FileOutputStream(tempKeyFile);
                 fos.write(mKey);
+                fos.close();
                 new BwInitTask(tempKeyFile, mBwInitTaskListener, bosswaveRouterAddr, bosswaveRouterPort).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (IOException e) {
                 e.printStackTrace();
@@ -790,27 +798,26 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private void showToast(final String text, final int duration) {
         final Activity activity = getActivity();
         if (activity != null) {
-            activity.runOnUiThread(() -> Toast.makeText(activity, text, duration).show());
+            activity.runOnUiThread(() -> {
+                mToast.setText(text);
+                mToast.setDuration(duration);
+                mToast.show();
+            });
         }
     }
 
     /**
      * Enables or disables click events for all buttons.
      *
-     * @param on      true to make the On button clickable, false otherwise
-     * @param off     true to make the Off button clickable, false otherwise
-     * @param capture true to make the Capture button clickable, false otherwise
+     * @param on  true to make the On button clickable, false otherwise
+     * @param off true to make the Off button clickable, false otherwise
      */
-    private void setButtonsEnabled(final boolean on, final boolean off, final boolean capture) {
+    private void setButtonsEnabled(final boolean on, final boolean off) {
         final Activity activity = getActivity();
         if (activity != null) {
-            activity.runOnUiThread(new Runnable() {
-                @Override
-                public void run() {
-                    mOnButton.setEnabled(on);
-                    mOffButton.setEnabled(off);
-                    mCaptureButton.setEnabled(capture);
-                }
+            activity.runOnUiThread(() -> {
+                mOnButton.setEnabled(on);
+                mOffButton.setEnabled(off);
             });
         }
     }
@@ -888,7 +895,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
                 String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
                 String imagePostUrl = "http://" + cellmateServerAddr + ":" + cellmateServerPort + "/";
-                new HttpPostImgTask(mHttpClient, imagePostUrl, mImage, mFx, mFy, mCx, mCy, mRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new HttpPostImgTask(getActivity(), mHttpClient, imagePostUrl, mImage, mFx, mFy, mCx, mCy, mRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -943,7 +950,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
                 String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
                 String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
-                new GrpcReqImgTask(cellmateServerAddr, Integer.valueOf(cellmateServerPort), mImage, mFx, mFy, mCx, mCy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new GrpcReqImgTask(getActivity(), cellmateServerAddr, Integer.valueOf(cellmateServerPort), mImage, mFx, mFy, mCx, mCy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
