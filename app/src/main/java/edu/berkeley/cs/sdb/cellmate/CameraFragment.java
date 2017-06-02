@@ -314,11 +314,14 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         @Override
         public void onResponse(String result) { // null means network error
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
-            mRecentObjects.add(mNextObjectIndex % CIRCULAR_ARRAY_LENGTH, result.trim());
-            mTargetObject = findCommon(mRecentObjects);
+
             if (result == null) {
                 showToast("Network error", Toast.LENGTH_SHORT);
             }
+
+            mRecentObjects.add(mNextObjectIndex % CIRCULAR_ARRAY_LENGTH, result.trim());
+            mTargetObject = findCommon(mRecentObjects);
+
 
             if (mTargetObject == null || mTargetObject.equals("None")) {
                 mTargetObject = null;
@@ -948,9 +951,9 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         public void run() {
             try {
                 SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
-                String cellmateServerAddr = preferences.getString(getString(R.string.cellmate_server_addr_key), getString(R.string.cellmate_server_addr_val));
-                String cellmateServerPort = preferences.getString(getString(R.string.cellmate_server_port_key), getString(R.string.cellmate_server_port_val));
-                new GrpcReqImgTask(getActivity(), cellmateServerAddr, Integer.valueOf(cellmateServerPort), mImage, mFx, mFy, mCx, mCy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                String grpcCellmateServerAddr = preferences.getString(getString(R.string.Grpc_server_addr_key), getString(R.string.cellmate_server_addr_val));
+                String grpcCellmateServerPort = preferences.getString(getString(R.string.Grpc_server_port_key), getString(R.string.cellmate_server_port_val));
+                new GrpcReqImgTask(getActivity(), grpcCellmateServerAddr, Integer.valueOf(grpcCellmateServerPort), mImage, mFx, mFy, mCx, mCy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
