@@ -4,6 +4,7 @@ package edu.berkeley.cs.sdb.cellmate;
 import android.content.Context;
 import android.media.Image;
 import android.os.AsyncTask;
+import android.os.SystemClock;
 import android.widget.Toast;
 
 import com.google.protobuf.ByteString;
@@ -24,6 +25,8 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
     private final double mFy;
     private final double mCx;
     private final double mCy;
+    private final int mWidth;
+    private final int mHeight;
     private final Listener mListener;
     private Exception mException;
 
@@ -36,6 +39,8 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
         mFy = fy;
         mCx = cx;
         mCy = cy;
+        mWidth = image.getWidth();
+        mHeight = image.getHeight();
         mListener = listener;
         mException = null;
     }
@@ -56,8 +61,8 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
                     .setFy(mFy)
                     .setCx(mCx)
                     .setCy(mCy)
-                    .setHeight(mImage.getHeight())
-                    .setWidth(mImage.getWidth())
+                    .setHeight(mHeight)
+                    .setWidth(mWidth)
                     .build();
             CellmateProto.ServerRespondMessage response = mStub.onClientQuery(request);
             if(response.getX() == -1) {
