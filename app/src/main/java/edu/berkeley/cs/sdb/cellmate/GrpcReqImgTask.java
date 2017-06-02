@@ -60,7 +60,12 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
                     .setWidth(mImage.getWidth())
                     .build();
             CellmateProto.ServerRespondMessage response = mStub.onClientQuery(request);
-            result = response.getFoundName();
+            if(response.getX() == -1) {
+                result = response.getName();
+            } else {
+                result = response.getName() + " " + String.valueOf(response.getX()) + " " + String.valueOf(response.getY());
+            }
+
         } catch (StatusRuntimeException e) {
             e.printStackTrace();
             mException = e;
