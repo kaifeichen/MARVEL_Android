@@ -4,7 +4,6 @@ package edu.berkeley.cs.sdb.cellmate;
 import android.content.Context;
 import android.media.Image;
 import android.os.AsyncTask;
-import android.os.SystemClock;
 import android.widget.Toast;
 
 import com.google.protobuf.ByteString;
@@ -51,7 +50,7 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
         ByteBuffer buffer = mImage.getPlanes()[0].getBuffer();
         byte[] bytes = new byte[buffer.remaining()];
         buffer.get(bytes);
-        mImage.close();
+        mImage.close(); // thread safe?
         try {
             ManagedChannel channel = ManagedChannelBuilder.forAddress(mHost, mPort).usePlaintext(true).build();
             GrpcServiceGrpc.GrpcServiceBlockingStub mStub = GrpcServiceGrpc.newBlockingStub(channel);

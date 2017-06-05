@@ -1,29 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
-    <ListPreference
-        android:defaultValue="@string/conn_type_val"
-        android:entries="@array/conn_types"
-        android:entryValues="@array/conn_types"
-        android:key="@string/conn_type_key"
-        android:title="@string/conn_type_title"/>
     <EditTextPreference
-        android:defaultValue="@string/cellmate_server_addr_val"
-        android:key="@string/cellmate_server_addr_key"
-        android:title="@string/cellmate_server_addr_title"/>
+        android:defaultValue="@string/grpc_server_addr_val"
+        android:key="@string/grpc_server_addr_key"
+        android:title="@string/grpc_server_addr_title" />
     <EditTextPreference
-        android:defaultValue="@string/cellmate_server_port_val"
-        android:key="@string/cellmate_server_port_key"
+        android:defaultValue="@string/grpc_server_port_val"
+        android:key="@string/grpc_server_port_key"
         android:numeric="integer"
-        android:title="@string/cellmate_server_port_title"/>
-    <EditTextPreference
-        android:defaultValue="@string/Grpc_server_addr_val"
-        android:key="@string/Grpc_server_addr_key"
-        android:title="@string/Grpc_server_addr_title"/>
-    <EditTextPreference
-        android:defaultValue="@string/Grpc_server_port_val"
-        android:key="@string/Grpc_server_port_key"
-        android:numeric="integer"
-        android:title="@string/Grpc_server_port_title"/>
+        android:title="@string/grpc_server_port_title" />
     <EditTextPreference
         android:defaultValue="@string/bosswave_router_addr_val"
         android:key="@string/bosswave_router_addr_key"
