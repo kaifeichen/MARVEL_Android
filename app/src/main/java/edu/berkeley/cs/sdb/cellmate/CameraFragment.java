@@ -48,11 +48,13 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.protobuf.ByteString;
 import com.splunk.mint.Mint;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -251,6 +253,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
 
         if (result == null) {
             showToast("Network error", Toast.LENGTH_SHORT);
+            return;
         }
 
         mRecentObjects.add(mNextObjectIndex % CIRCULAR_ARRAY_LENGTH, result.trim());
@@ -771,14 +774,19 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     }
 
     private class GrpcPostImageRunnable implements Runnable {
-        private final Image mImage;
+        private final ByteString mData;
         private final double mFx;
         private final double mFy;
         private final double mCx;
         private final double mCy;
 
         private GrpcPostImageRunnable(Image image) {
-            mImage = image;
+            ByteBuffer buffer = image.getPlanes()[0].getBuffer();
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+            mData = ByteString.copyFrom(bytes); // TODO buffer.array()
+            image.close();
+
             Activity activity = getActivity();
             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
             mFx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
@@ -793,7 +801,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
                 String grpcCellmateServerAddr = preferences.getString(getString(R.string.grpc_server_addr_key), getString(R.string.grpc_server_addr_val));
                 String grpcCellmateServerPort = preferences.getString(getString(R.string.grpc_server_port_key), getString(R.string.grpc_server_port_val));
-                new GrpcReqImgTask(getActivity(), grpcCellmateServerAddr, Integer.valueOf(grpcCellmateServerPort), mImage, mFx, mFy, mCx, mCy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new GrpcReqImgTask(grpcCellmateServerAddr, Integer.valueOf(grpcCellmateServerPort), mData, mFx, mFy, mCx, mCy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
