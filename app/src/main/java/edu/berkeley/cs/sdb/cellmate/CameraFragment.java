@@ -781,10 +781,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         private final double mCy;
 
         private GrpcPostImageRunnable(Image image) {
-            ByteBuffer buffer = image.getPlanes()[0].getBuffer();
-            byte[] bytes = new byte[buffer.remaining()];
-            buffer.get(bytes);
-            mData = ByteString.copyFrom(bytes); // TODO buffer.array()
+            mData = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
             image.close();
 
             Activity activity = getActivity();
