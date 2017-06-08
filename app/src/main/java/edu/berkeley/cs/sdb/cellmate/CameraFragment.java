@@ -254,26 +254,22 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 mTextView.setText(result);
                 setButtonsEnabled(true, true);
 
+                if(x != -1) {
+                    double right = 480 - y + width;
+                    double left = 480 - y - width;
+                    double bottom = x + width;
+                    double top = Math.max(0, x - width);
+                    Rect rect = new Rect((int)left,(int)top,(int)(right),(int)(bottom));
 
-                double right = 480 - y + width;
-                double left = 480 - y - width;
-                double bottom = x + width;
-                double top = Math.max(0, x - width);
-                Rect rect = new Rect((int)left,(int)top,(int)(right),(int)(bottom));
+                    Paint paint = new Paint();
+                    paint.setColor(Color.BLUE);
+                    paint.setStyle(Paint.Style.STROKE);
 
-                Paint paint = new Paint();
-                paint.setColor(Color.BLUE);
-                paint.setStyle(Paint.Style.STROKE);
-
-                Bitmap bmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
-                Canvas canvas = new Canvas(bmp);
-                canvas.drawRect(rect,paint);
-                mHighLight.setImageBitmap(bmp);
-                System.out.println("width is " + width);
-                System.out.println("Bottom is " + bottom);
-                System.out.println("right is" + right);
-
-
+                    Bitmap bmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+                    Canvas canvas = new Canvas(bmp);
+                    canvas.drawRect(rect,paint);
+                    mHighLight.setImageBitmap(bmp);
+                }
             }
         }
     };
