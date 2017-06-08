@@ -253,7 +253,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private List<String> mRecentObjects;
     private final 
       
-      ReqImgTask.Listener mGrpcRecognitionListener = (String result, double x, double y, double width) -> { // null means network error
+      GrpcReqImgTask.Listener mGrpcRecognitionListener = (String result, double x, double y, double width) -> { // null means network error
         Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
 
         if (result == null) {
