@@ -29,6 +29,10 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
     private final int mHeight;
     private final Listener mListener;
     private Exception mException;
+    private double mX;
+    private double mY;
+    private double mQRWidth;
+
 
     public GrpcReqImgTask(Context context, String host, int port, Image image, double fx, double fy, double cx, double cy, Listener listener) {
         mContext = context;
@@ -43,6 +47,8 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
         mHeight = image.getHeight();
         mListener = listener;
         mException = null;
+        mX = -1;
+        mY = -1;
     }
 
     @Override
@@ -68,6 +74,9 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
             if(response.getX() == -1) {
                 result = response.getName();
             } else {
+                mX = response.getX();
+                mY = response.getY();
+                mQRWidth = response.getWidth();
                 result = response.getName() + " " + String.valueOf(response.getX()) + " " + String.valueOf(response.getY());
             }
 
@@ -84,10 +93,10 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
             // onPostExecute is called on the UI/main thread
             Toast.makeText(mContext, "Network Error", Toast.LENGTH_LONG);
         }
-        mListener.onResponse(result);
+        mListener.onResponse(result, mX, mY, mQRWidth);
     }
 
     public interface Listener {
-        void onResponse(String result); // null means network error
+        void onResponse(String result, double x, double y, double width); // null means network error
     }
 }

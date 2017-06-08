@@ -8,8 +8,12 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -27,6 +31,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
@@ -45,6 +50,7 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -93,10 +99,12 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private HandlerThread mBackgroundThread;
     // A Handler for running tasks in the background.
     private Handler mBackgroundHandler;
+
+    private ImageView mHighLight;
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = new ImageReader.OnImageAvailableListener() {
         @Override
         public void onImageAvailable(ImageReader reader) {
-            mBackgroundHandler.post(new ImageHandler(reader.acquireNextImage()));
+            mBackgroundHandler.post(new ImageHandler(reader.acquireLatestImage()));
         }
     };
     // An ImageReader that handles still image capture.
@@ -228,7 +236,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private String mTargetObject;
     private final GrpcReqImgTask.Listener mGrpcRecognitionListener = new GrpcReqImgTask.Listener() {
         @Override
-        public void onResponse(String result) { // null means network error
+        public void onResponse(String result, double x, double y, double width) { // null means network error
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
             if (result == null) {
                 showToast("Network error", Toast.LENGTH_SHORT);
@@ -245,6 +253,27 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 mTargetObject = result.trim();
                 mTextView.setText(result);
                 setButtonsEnabled(true, true);
+
+
+                double right = 480 - y + width;
+                double left = 480 - y - width;
+                double bottom = x + width;
+                double top = Math.max(0, x - width);
+                Rect rect = new Rect((int)left,(int)top,(int)(right),(int)(bottom));
+
+                Paint paint = new Paint();
+                paint.setColor(Color.BLUE);
+                paint.setStyle(Paint.Style.STROKE);
+
+                Bitmap bmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(bmp);
+                canvas.drawRect(rect,paint);
+                mHighLight.setImageBitmap(bmp);
+                System.out.println("width is " + width);
+                System.out.println("Bottom is " + bottom);
+                System.out.println("right is" + right);
+
+
             }
         }
     };
@@ -418,6 +447,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         mOffButton = (Button) view.findViewById(R.id.off);
         mOffButton.setOnClickListener(mOffButtonOnClickListener);
 
+        mHighLight = (ImageView) view.findViewById(R.id.imageView);
         setButtonsEnabled(false, false);
         setHasOptionsMenu(true);
 
@@ -864,7 +894,8 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             String[] connTypes = getResources().getStringArray(R.array.conn_types);
             if (connType.equals(connTypes[0])) { // HTTP
                 // AsyncTask task instance must be created and executed on the UI thread
-                mBackgroundHandler.post(new HttpPostImageRunnable(mImage, mFx, mFy, mCx, mCy));
+//                mBackgroundHandler.post(new HttpPostImageRunnable(mImage, mFx, mFy, mCx, mCy));
+                mBackgroundHandler.post(new GrpcPostImageRunnable(mImage, mFx, mFy, mCx, mCy));
             } else if (connType.equals(connTypes[1])) { // BOSSWAVE
                 mBackgroundHandler.post(new BWPublishImageRunnable(mImage, mFx, mFy, mCx, mCy));
             } else if (connType.equals(connTypes[2])) { // GRPC
