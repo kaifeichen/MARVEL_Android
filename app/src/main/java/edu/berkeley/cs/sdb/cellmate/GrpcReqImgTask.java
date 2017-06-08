@@ -22,7 +22,11 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
     private final double mCx;
     private final double mCy;
     private final Listener mListener;
+    private double mX;
+    private double mY;
+    private double mQRWidth;
     private ManagedChannel mChannel;
+
 
     public GrpcReqImgTask(String host, int port, ByteString data, double fx, double fy, double cx, double cy, Listener listener) {
         mHost = host;
@@ -33,6 +37,8 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
         mCx = cx;
         mCy = cy;
         mListener = listener;
+        mX = -1;
+        mY = -1;
     }
 
     @Override
@@ -53,9 +59,11 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
             if(response.getX() == -1) {
                 result = response.getName();
             } else {
-                result = response.getName() + " " + String.valueOf(response.getX()) + " " + String.valueOf(response.getY());
+                mX = response.getX();
+                mY = response.getY();
+                mQRWidth = response.getWidth();
+                result = response.getName();
             }
-
         } catch (StatusRuntimeException e) {
             e.printStackTrace();
         }
@@ -64,10 +72,10 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
 
     @Override
     protected void onPostExecute(String result) {
-        mListener.onResponse(result);
+        mListener.onResponse(result, mX, mY, mQRWidth);
     }
 
     public interface Listener {
-        void onResponse(String result); // null means network error
+        void onResponse(String result, double x, double y, double width); // null means network error
     }
 }

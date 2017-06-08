@@ -8,8 +8,12 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.RectF;
@@ -27,6 +31,7 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
@@ -45,6 +50,7 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -77,7 +83,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
-    private final int CIRCULAR_ARRAY_LENGTH = 10;
+    private final int CIRCULAR_ARRAY_LENGTH = 60;
     private AutoFitTextureView mTextureView;
     private TextView mTextView;
     private Button mOnButton;
@@ -94,7 +100,9 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private HandlerThread mBackgroundThread;
     // A Handler for running tasks in the background.
     private Handler mBackgroundHandler;
+    private ImageView mHighLight;
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> mBackgroundHandler.post(new GrpcPostImageRunnable(reader.acquireLatestImage()));
+  
     // An ImageReader that handles still image capture.
     private ImageReader mImageReader;
     // CaptureRequest.Builder for the camera preview
@@ -243,7 +251,9 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     };
     private int mNextObjectIndex;
     private List<String> mRecentObjects;
-    private final GrpcReqImgTask.Listener mGrpcRecognitionListener = (String result) -> { // null means network error
+    private final 
+      
+      GrpcReqImgTask.Listener mGrpcRecognitionListener = (String result, double x, double y, double width) -> { // null means network error
         Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
 
         if (result == null) {
@@ -263,6 +273,23 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             showToast(result + " recognized", Toast.LENGTH_SHORT);
             mTextView.setText(mTargetObject);
             setButtonsEnabled(true, true);
+          
+            if(x != -1) {
+                double right = 480 - y + width;
+                double left = 480 - y - width;
+                double bottom = x + width;
+                double top = Math.max(0, x - width);
+                Rect rect = new Rect((int)left,(int)top,(int)(right),(int)(bottom));
+
+                Paint paint = new Paint();
+                paint.setColor(Color.BLUE);
+                paint.setStyle(Paint.Style.STROKE);
+
+                Bitmap bmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(bmp);
+                canvas.drawRect(rect,paint);
+                mHighLight.setImageBitmap(bmp);
+            }
         }
     };
 
@@ -349,6 +376,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         mOffButton = (Button) view.findViewById(R.id.off);
         mOffButton.setOnClickListener(mOffButtonOnClickListener);
 
+        mHighLight = (ImageView) view.findViewById(R.id.imageView);
         setButtonsEnabled(false, false);
         setHasOptionsMenu(true);
 
