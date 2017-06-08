@@ -129,8 +129,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             }
         }
     };
-    // Whether the current camera device supports Flash or not.
-    private boolean mFlashSupported;
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
@@ -171,9 +169,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             try {
                 // Auto focus should be continuous for camera preview.
                 mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_MODE, CaptureRequest.CONTROL_AF_MODE_CONTINUOUS_PICTURE);
-
-                // Flash is automatically enabled when necessary.
-                setAutoFlash(mPreviewRequestBuilder);
 
                 CaptureRequest previewRequest = mPreviewRequestBuilder.build();
                 // do not call anything
@@ -256,7 +251,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             return;
         }
 
-        mRecentObjects.add(mNextObjectIndex % CIRCULAR_ARRAY_LENGTH, result.trim());
+        mRecentObjects.add(mNextObjectIndex % CIRCULAR_ARRAY_LENGTH, result);
         mTargetObject = findCommon(mRecentObjects);
 
 
@@ -576,10 +571,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                     mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
                 }
 
-                // Check if the flash is supported.
-                Boolean available = characteristics.get(CameraCharacteristics.FLASH_INFO_AVAILABLE);
-                mFlashSupported = available == null ? false : available;
-
                 mCameraId = cameraId;
                 return;
             }
@@ -683,13 +674,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             mCameraDevice.createCaptureSession(surfaces, mSessionStateCallback, null);
         } catch (CameraAccessException e) {
             e.printStackTrace();
-        }
-    }
-
-    private void setAutoFlash(CaptureRequest.Builder requestBuilder) {
-        if (mFlashSupported) {
-            requestBuilder.set(CaptureRequest.CONTROL_AE_MODE,
-                    CaptureRequest.CONTROL_AE_MODE_ON_AUTO_FLASH);
         }
     }
 
