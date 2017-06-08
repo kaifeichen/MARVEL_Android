@@ -8,21 +8,12 @@
     <string name="settings">Settings</string>
     <string name="request_permission">This sample needs camera permission.</string>
 
-    <string name="conn_type_key">conn_type_key</string>
-    <string name="conn_type_title">Connection Type</string>
-    <string name="conn_type_val">HTTP</string>
-    <string name="cellmate_server_addr_key">cellmate_server_addr</string>
-    <string name="cellmate_server_addr_title">CellMate Server Address</string>
-    <string name="cellmate_server_addr_val">castle.cs.berkeley.edu</string>
-    <string name="cellmate_server_port_key">cellmate_server_port</string>
-    <string name="cellmate_server_port_title">CellMate Server Port</string>
-    <string name="cellmate_server_port_val">50011</string>
-    <string name="Grpc_server_addr_key">grpc_server_addr</string>
-    <string name="Grpc_server_addr_title">Grpc Server Address</string>
-    <string name="Grpc_server_addr_val">castle.cs.berkeley.edu</string>
-    <string name="Grpc_server_port_key">grpc_server_port</string>
-    <string name="Grpc_server_port_title">Grpc Server Port</string>
-    <string name="Grpc_server_port_val">50012</string>
+    <string name="grpc_server_addr_key">grpc_server_addr</string>
+    <string name="grpc_server_addr_title">GRPC Server Address</string>
+    <string name="grpc_server_addr_val">castle.cs.berkeley.edu</string>
+    <string name="grpc_server_port_key">grpc_server_port</string>
+    <string name="grpc_server_port_title">GRPC Server Port</string>
+    <string name="grpc_server_port_val">50001</string>
     <string name="bosswave_router_addr_key">bosswave_router_addr</string>
     <string name="bosswave_router_addr_title">BOSSWAVE Router Address</string>
     <string name="bosswave_router_addr_val">castle.cs.berkeley.edu</string>
