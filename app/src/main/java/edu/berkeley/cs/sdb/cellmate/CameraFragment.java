@@ -82,7 +82,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
-    private final int CIRCULAR_ARRAY_LENGTH = 10;
+    private final int CIRCULAR_ARRAY_LENGTH = 60;
     private AutoFitTextureView mTextureView;
     private TextView mTextView;
     private Button mOnButton;

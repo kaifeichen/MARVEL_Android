@@ -77,7 +77,7 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
                 mX = response.getX();
                 mY = response.getY();
                 mQRWidth = response.getWidth();
-                result = response.getName() + " " + String.valueOf(response.getX()) + " " + String.valueOf(response.getY());
+                result = response.getName();
             }
 
         } catch (StatusRuntimeException e) {
