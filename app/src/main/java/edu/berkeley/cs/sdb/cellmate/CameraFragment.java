@@ -80,10 +80,11 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
     private static final String MINT_API_KEY = "76da1102";
+    private static final int REQUEST_INTERVAL = 500;
     private static final int REQUEST_CAMERA_PERMISSION = 1;
+    private static final int CIRCULAR_ARRAY_LENGTH = 10;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
-    private final int CIRCULAR_ARRAY_LENGTH = 60;
     private AutoFitTextureView mTextureView;
     private TextView mTextView;
     private Button mOnButton;
@@ -101,7 +102,19 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     // A Handler for running tasks in the background.
     private Handler mBackgroundHandler;
     private ImageView mHighLight;
-    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> mBackgroundHandler.post(new GrpcPostImageRunnable(reader.acquireLatestImage()));
+    private Long mLastTime;
+    Bitmap mBmp;
+    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
+        Long time = System.currentTimeMillis();
+        Image image = reader.acquireLatestImage();
+        if (time - mLastTime > REQUEST_INTERVAL) {
+            ByteString data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
+            mBackgroundHandler.post(new GrpcPostImageRunnable(data));
+            mLastTime = time;
+        }
+        image.close();
+
+    };
   
     // An ImageReader that handles still image capture.
     private ImageReader mImageReader;
@@ -261,7 +274,10 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             return;
         }
 
-        mRecentObjects.add(mNextObjectIndex % CIRCULAR_ARRAY_LENGTH, result);
+        showToast(result + " recognized", Toast.LENGTH_SHORT);
+
+        mRecentObjects.add(mNextObjectIndex, result);
+        mNextObjectIndex = (mNextObjectIndex + 1) % CIRCULAR_ARRAY_LENGTH;
         mTargetObject = findCommon(mRecentObjects);
 
 
@@ -270,26 +286,33 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             mTextView.setText(getString(R.string.none));
             setButtonsEnabled(false, false);
         } else {
-            showToast(result + " recognized", Toast.LENGTH_SHORT);
             mTextView.setText(mTargetObject);
             setButtonsEnabled(true, true);
           
-            if(x != -1) {
-                double right = 480 - y + width;
-                double left = 480 - y - width;
-                double bottom = x + width;
-                double top = Math.max(0, x - width);
-                Rect rect = new Rect((int)left,(int)top,(int)(right),(int)(bottom));
-
-                Paint paint = new Paint();
-                paint.setColor(Color.BLUE);
-                paint.setStyle(Paint.Style.STROKE);
-
-                Bitmap bmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
-                Canvas canvas = new Canvas(bmp);
-                canvas.drawRect(rect,paint);
-                mHighLight.setImageBitmap(bmp);
-            }
+//            if(x != -1) {
+//                double right = 480 - y + width;
+//                double left = 480 - y - width;
+//                double bottom = x + width;
+//                double top = Math.max(0, x - width);
+//                Rect rect = new Rect((int)left,(int)top,(int)(right),(int)(bottom));
+//
+//                Paint paint = new Paint();
+//                paint.setColor(Color.BLUE);
+//                paint.setStyle(Paint.Style.STROKE);
+//                if(mBmp != null && !mBmp.isRecycled()) {
+//                    mBmp.recycle();
+//                }
+//                Bitmap mBmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+//                Canvas canvas = new Canvas(mBmp);
+//                canvas.drawRect(rect,paint);
+//                mHighLight.setImageBitmap(mBmp);
+//            } else {
+//                if(mBmp != null && !mBmp.isRecycled()) {
+//                    mBmp.recycle();
+//                }
+//                Bitmap mBmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+//                mHighLight.setImageBitmap(mBmp);
+//            }
         }
     };
 
@@ -380,6 +403,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         setButtonsEnabled(false, false);
         setHasOptionsMenu(true);
 
+        mLastTime = System.currentTimeMillis();
         mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
 
         // hide action bar
@@ -792,9 +816,8 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         private final double mCx;
         private final double mCy;
 
-        private GrpcPostImageRunnable(Image image) {
-            mData = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
-            image.close();
+        private GrpcPostImageRunnable(ByteString data) {
+            mData = data;
 
             Activity activity = getActivity();
             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
