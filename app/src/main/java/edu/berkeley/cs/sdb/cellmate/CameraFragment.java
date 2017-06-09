@@ -31,7 +31,6 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
@@ -60,12 +59,12 @@ import com.splunk.mint.Mint;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
@@ -80,10 +79,11 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
     private static final String MINT_API_KEY = "76da1102";
+    private static final int REQUEST_INTERVAL = 500;
     private static final int REQUEST_CAMERA_PERMISSION = 1;
+    private static final int CIRCULAR_BUFFER_LENGTH = 10;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
-    private final int CIRCULAR_ARRAY_LENGTH = 60;
     private AutoFitTextureView mTextureView;
     private TextView mTextView;
     private Button mOnButton;
@@ -101,7 +101,19 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     // A Handler for running tasks in the background.
     private Handler mBackgroundHandler;
     private ImageView mHighLight;
-    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> mBackgroundHandler.post(new GrpcPostImageRunnable(reader.acquireLatestImage()));
+    private Long mLastTime;
+    Bitmap mBmp;
+    private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
+        Long time = System.currentTimeMillis();
+        Image image = reader.acquireLatestImage();
+        if (time - mLastTime > REQUEST_INTERVAL) {
+            ByteString data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
+            mBackgroundHandler.post(new GrpcPostImageRunnable(data));
+            mLastTime = time;
+        }
+        image.close();
+
+    };
   
     // An ImageReader that handles still image capture.
     private ImageReader mImageReader;
@@ -249,7 +261,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
         }
     };
-    private int mNextObjectIndex;
     private List<String> mRecentObjects;
     private final 
       
@@ -261,8 +272,18 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             return;
         }
 
-        mRecentObjects.add(mNextObjectIndex % CIRCULAR_ARRAY_LENGTH, result);
+        showToast(result + " recognized", Toast.LENGTH_SHORT);
+
+        mRecentObjects.add(result);
+        if(mRecentObjects.size() > CIRCULAR_BUFFER_LENGTH) {
+            mRecentObjects.remove(0);
+        }
         mTargetObject = findCommon(mRecentObjects);
+//        String link = "";
+//        for(String s : mRecentObjects) {
+//            link+=(s.substring(0,4) + ",");
+//        }
+//        showToast(link, Toast.LENGTH_SHORT);
 
 
         if (mTargetObject == null || mTargetObject.equals("None")) {
@@ -270,7 +291,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             mTextView.setText(getString(R.string.none));
             setButtonsEnabled(false, false);
         } else {
-            showToast(result + " recognized", Toast.LENGTH_SHORT);
             mTextView.setText(mTargetObject);
             setButtonsEnabled(true, true);
           
@@ -284,11 +304,19 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 Paint paint = new Paint();
                 paint.setColor(Color.BLUE);
                 paint.setStyle(Paint.Style.STROKE);
-
-                Bitmap bmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
-                Canvas canvas = new Canvas(bmp);
+                if(mBmp != null && !mBmp.isRecycled()) {
+                    mBmp.recycle();
+                }
+                Bitmap mBmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(mBmp);
                 canvas.drawRect(rect,paint);
-                mHighLight.setImageBitmap(bmp);
+                mHighLight.setImageBitmap(mBmp);
+            } else {
+                if(mBmp != null && !mBmp.isRecycled()) {
+                    mBmp.recycle();
+                }
+                Bitmap mBmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+                mHighLight.setImageBitmap(mBmp);
             }
         }
     };
@@ -380,6 +408,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         setButtonsEnabled(false, false);
         setHasOptionsMenu(true);
 
+        mLastTime = System.currentTimeMillis();
         mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
 
         // hide action bar
@@ -398,8 +427,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         initBosswaveClient();
 
         mTargetObject = null;
-        mNextObjectIndex = 0;
-        mRecentObjects = new ArrayList<>(CIRCULAR_ARRAY_LENGTH);
+        mRecentObjects = new LinkedList<>();
 
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
         preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
@@ -792,9 +820,8 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         private final double mCx;
         private final double mCy;
 
-        private GrpcPostImageRunnable(Image image) {
-            mData = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
-            image.close();
+        private GrpcPostImageRunnable(ByteString data) {
+            mData = data;
 
             Activity activity = getActivity();
             SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);

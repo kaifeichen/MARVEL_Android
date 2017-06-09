@@ -25,7 +25,7 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
     private double mX;
     private double mY;
     private double mQRWidth;
-    private ManagedChannel mChannel;
+
 
 
     public GrpcReqImgTask(String host, int port, ByteString data, double fx, double fy, double cx, double cy, Listener listener) {
@@ -46,7 +46,7 @@ class GrpcReqImgTask extends AsyncTask<Void, Void, String> {
         String result = null;
 
         try {
-            mChannel = ManagedChannelBuilder.forAddress(mHost, mPort).usePlaintext(true).build();
+            ManagedChannel mChannel = ManagedChannelBuilder.forAddress(mHost, mPort).usePlaintext(true).build();
             GrpcServiceGrpc.GrpcServiceBlockingStub stub = GrpcServiceGrpc.newBlockingStub(mChannel);
             CellmateProto.ClientQueryMessage request = CellmateProto.ClientQueryMessage.newBuilder()
                     .setImage(mData)
