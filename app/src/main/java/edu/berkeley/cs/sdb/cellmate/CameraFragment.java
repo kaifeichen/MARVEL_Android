@@ -31,7 +31,6 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
-import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
@@ -60,12 +59,12 @@ import com.splunk.mint.Mint;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
@@ -82,7 +81,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private static final String MINT_API_KEY = "76da1102";
     private static final int REQUEST_INTERVAL = 500;
     private static final int REQUEST_CAMERA_PERMISSION = 1;
-    private static final int CIRCULAR_ARRAY_LENGTH = 10;
+    private static final int CIRCULAR_BUFFER_LENGTH = 10;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
     private AutoFitTextureView mTextureView;
@@ -262,7 +261,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
         }
     };
-    private int mNextObjectIndex;
     private List<String> mRecentObjects;
     private final 
       
@@ -276,9 +274,16 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
 
         showToast(result + " recognized", Toast.LENGTH_SHORT);
 
-        mRecentObjects.add(mNextObjectIndex, result);
-        mNextObjectIndex = (mNextObjectIndex + 1) % CIRCULAR_ARRAY_LENGTH;
+        mRecentObjects.add(result);
+        if(mRecentObjects.size() > CIRCULAR_BUFFER_LENGTH) {
+            mRecentObjects.remove(0);
+        }
         mTargetObject = findCommon(mRecentObjects);
+//        String link = "";
+//        for(String s : mRecentObjects) {
+//            link+=(s.substring(0,4) + ",");
+//        }
+//        showToast(link, Toast.LENGTH_SHORT);
 
 
         if (mTargetObject == null || mTargetObject.equals("None")) {
@@ -289,30 +294,30 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             mTextView.setText(mTargetObject);
             setButtonsEnabled(true, true);
           
-//            if(x != -1) {
-//                double right = 480 - y + width;
-//                double left = 480 - y - width;
-//                double bottom = x + width;
-//                double top = Math.max(0, x - width);
-//                Rect rect = new Rect((int)left,(int)top,(int)(right),(int)(bottom));
-//
-//                Paint paint = new Paint();
-//                paint.setColor(Color.BLUE);
-//                paint.setStyle(Paint.Style.STROKE);
-//                if(mBmp != null && !mBmp.isRecycled()) {
-//                    mBmp.recycle();
-//                }
-//                Bitmap mBmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
-//                Canvas canvas = new Canvas(mBmp);
-//                canvas.drawRect(rect,paint);
-//                mHighLight.setImageBitmap(mBmp);
-//            } else {
-//                if(mBmp != null && !mBmp.isRecycled()) {
-//                    mBmp.recycle();
-//                }
-//                Bitmap mBmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
-//                mHighLight.setImageBitmap(mBmp);
-//            }
+            if(x != -1) {
+                double right = 480 - y + width;
+                double left = 480 - y - width;
+                double bottom = x + width;
+                double top = Math.max(0, x - width);
+                Rect rect = new Rect((int)left,(int)top,(int)(right),(int)(bottom));
+
+                Paint paint = new Paint();
+                paint.setColor(Color.BLUE);
+                paint.setStyle(Paint.Style.STROKE);
+                if(mBmp != null && !mBmp.isRecycled()) {
+                    mBmp.recycle();
+                }
+                Bitmap mBmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(mBmp);
+                canvas.drawRect(rect,paint);
+                mHighLight.setImageBitmap(mBmp);
+            } else {
+                if(mBmp != null && !mBmp.isRecycled()) {
+                    mBmp.recycle();
+                }
+                Bitmap mBmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+                mHighLight.setImageBitmap(mBmp);
+            }
         }
     };
 
@@ -422,8 +427,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         initBosswaveClient();
 
         mTargetObject = null;
-        mNextObjectIndex = 0;
-        mRecentObjects = new ArrayList<>(CIRCULAR_ARRAY_LENGTH);
+        mRecentObjects = new LinkedList<>();
 
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
         preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
