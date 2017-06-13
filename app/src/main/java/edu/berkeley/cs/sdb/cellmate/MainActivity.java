@@ -13,9 +13,12 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         Mint.initAndStartSession(this, MINT_API_KEY);
+
+
+
         if (savedInstanceState == null) {
             getFragmentManager().beginTransaction()
-                    .replace(android.R.id.content, CameraFragment.newInstance())
+                    .replace(android.R.id.content, PreviewFragment.newInstance())
                     .commit();
         }
     }

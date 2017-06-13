@@ -54,7 +54,6 @@ import com.splunk.mint.Mint;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -69,11 +68,10 @@ import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
 import edu.berkeley.cs.sdb.bosswave.PayloadObject;
 
 
-public class CameraFragment extends Fragment implements FragmentCompat.OnRequestPermissionsResultCallback {
+public class PreviewFragment extends Fragment implements FragmentCompat.OnRequestPermissionsResultCallback {
     private static final String LOG_TAG = "CellMate";
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
-    private static final String MINT_API_KEY = "76da1102";
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
@@ -82,18 +80,8 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private TextView mTextView;
     private Button mOnButton;
     private Button mOffButton;
-    // ID of the current CameraDevice
-    private String mCameraId;
-    // A CameraCaptureSession for camera preview.
-    private CameraCaptureSession mCaptureSession;
-    // A reference to the opened CameraDevice.
-    private CameraDevice mCameraDevice;
-    // The android.util.Size of camera preview.
+    private Camera mCamera;
     private Size mPreviewSize;
-    // An additional thread for running tasks that shouldn't block the UI.
-    private HandlerThread mBackgroundThread;
-    // A Handler for running tasks in the background.
-    private Handler mBackgroundHandler;
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> mBackgroundHandler.post(new GrpcPostImageRunnable(reader.acquireLatestImage()));
     // An ImageReader that handles still image capture.
     private ImageReader mImageReader;
@@ -285,8 +273,8 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         return max.getKey();
     }
 
-    public static CameraFragment newInstance() {
-        return new CameraFragment();
+    public static PreviewFragment newInstance() {
+        return new PreviewFragment();
     }
 
     /**
@@ -375,8 +363,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
 
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
         preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
-
-        Mint.initAndStartSession(getActivity(), MINT_API_KEY);
     }
 
     @Override
