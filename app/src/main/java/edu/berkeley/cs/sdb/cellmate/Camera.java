@@ -34,7 +34,7 @@ public class Camera {
     private static final String LOG_TAG = "CellMate";
 
     private final Size mSize;
-    private List<StateListener> mStateListeners;
+    private List<OnCameraOpenedListener> mCameraOpenedListeners;
     private List<Surface> mSurfaces;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
@@ -59,7 +59,7 @@ public class Camera {
             mCameraOpenCloseLock.release();
             mCameraDevice = camera;
             updatePreviewSession();
-            mStateListeners.forEach((listener) -> listener.onOpened());
+            mCameraOpenedListeners.forEach((listener) -> listener.onOpened());
         }
 
         @Override
@@ -111,7 +111,7 @@ public class Camera {
     private Camera(Context context, Size size) {
         mContext = context;
         mSize = size;
-        mStateListeners = new LinkedList<>();
+        mCameraOpenedListeners = new LinkedList<>();
         mSurfaces = new LinkedList<>();
     }
 
@@ -122,15 +122,15 @@ public class Camera {
         return mInstance;
     }
 
-    public boolean registerStateListener(StateListener listener) {
-        if (mStateListeners.contains(listener)) {
+    public boolean registerStateListener(OnCameraOpenedListener listener) {
+        if (mCameraOpenedListeners.contains(listener)) {
             return false;
         }
-        return mStateListeners.add(listener);
+        return mCameraOpenedListeners.add(listener);
     }
 
-    public boolean unregisterStateListener(StateListener listener) {
-        return mStateListeners.remove(listener);
+    public boolean unregisterStateListener(OnCameraOpenedListener listener) {
+        return mCameraOpenedListeners.remove(listener);
     }
 
     /**
@@ -257,7 +257,12 @@ public class Camera {
     }
 
     private void updatePreviewSession() {
-        if (!mSurfaces.isEmpty()) {
+        if (mSurfaces.isEmpty()) {
+            if (mCaptureSession != null) {
+                mCaptureSession.close();
+                mCaptureSession = null;
+            }
+        } else {
             try {
                 // We set up a CaptureRequest.Builder with the output Surface.
                 mPreviewRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
@@ -271,7 +276,7 @@ public class Camera {
         }
     }
 
-    public interface StateListener {
+    public interface OnCameraOpenedListener {
         void onOpened();
     }
 }

@@ -3,30 +3,18 @@ package edu.berkeley.cs.sdb.cellmate;
 import android.Manifest;
 import android.app.Activity;
 import android.app.Fragment;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
-import android.graphics.Point;
-import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCaptureSession;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraDevice;
-import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.AsyncTask;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.HandlerThread;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
@@ -54,14 +42,10 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 
 import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
 import edu.berkeley.cs.sdb.bosswave.PayloadObject;
@@ -87,11 +71,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         image.close();
         postImage(data);
     };
-    // An ImageReader that handles still image capture.
-    private ImageReader mImageReader;
-    // CaptureRequest.Builder for the camera preview
-    private CaptureRequest.Builder mPreviewRequestBuilder;
-    private final Camera.StateListener mCameraStateListener = () -> {
+    private final Camera.OnCameraOpenedListener mOnCameraOpenedListener = () -> {
         mCamera.registerPreviewSurface(mPreviewSurface);
         setButtonsEnabled(false, false);
     };
@@ -281,7 +261,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
 
         mCamera = Camera.getInstance(activity, new Size(640, 480));
-        mCamera.registerStateListener(mCameraStateListener);
+        mCamera.registerStateListener(mOnCameraOpenedListener);
     }
 
     @Override
@@ -304,6 +284,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
     public void onPause() {
         mTargetObject = null;
         mTextView.setText(getString(R.string.none));
+        mCamera.unregisterPreviewSurface(mPreviewSurface);
         mCamera.close();
         mCamera.stopBackgroundThread();
         super.onPause();
@@ -428,20 +409,6 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
                 mOffButton.setEnabled(off);
             });
         }
-    }
-
-    /**
-     * Compares two {@code Size}s based on their areas.
-     */
-    private static class CompareSizesByArea implements Comparator<Size> {
-
-        @Override
-        public int compare(Size lhs, Size rhs) {
-            // We cast here to ensure the multiplications won't overflow
-            return Long.signum((long) lhs.getWidth() * lhs.getHeight() -
-                    (long) rhs.getWidth() * rhs.getHeight());
-        }
-
     }
 
     private void postImage(ByteString data) {
