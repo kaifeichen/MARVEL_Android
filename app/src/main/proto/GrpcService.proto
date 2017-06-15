@@ -8,7 +8,7 @@ option java_outer_classname = "CellmateProto";
 
 
 service GrpcService {
-    rpc onClientQuery(ClientQueryMessage) returns (ServerRespondMessage) {}
+    rpc onClientQuery(stream ClientQueryMessage) returns (stream ServerRespondMessage) {}
 }
 
 message ClientQueryMessage {
