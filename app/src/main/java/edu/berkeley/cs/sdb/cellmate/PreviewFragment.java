@@ -10,7 +10,6 @@ import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
-import android.hardware.camera2.CaptureRequest;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.AsyncTask;
@@ -42,7 +41,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -63,6 +61,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
     private Button mOnButton;
     private Button mOffButton;
     private Camera mCamera;
+    // The android.util.Size of camera preview.
     private Size mPreviewSize;
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
         Image image = reader.acquireLatestImage();
@@ -82,10 +81,6 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
 
             mPreviewSurface = new Surface(surface);
 
-            if (ContextCompat.checkSelfPermission(getActivity(), Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                requestCameraPermission();
-                return;
-            }
             configureTransform(width, height);
             mCamera.open();
         }
@@ -97,6 +92,9 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
 
         @Override
         public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
+            assert mCamera.unregisterPreviewSurface(mPreviewSurface);
+            mPreviewSurface = null;
+            surface.release();
             return true;
         }
 
@@ -262,6 +260,10 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
 
         mCamera = Camera.getInstance(activity, new Size(640, 480));
         mCamera.registerStateListener(mOnCameraOpenedListener);
+
+        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestCameraPermission();
+        }
     }
 
     @Override
@@ -284,7 +286,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
     public void onPause() {
         mTargetObject = null;
         mTextView.setText(getString(R.string.none));
-        mCamera.unregisterPreviewSurface(mPreviewSurface);
+
         mCamera.close();
         mCamera.stopBackgroundThread();
         super.onPause();

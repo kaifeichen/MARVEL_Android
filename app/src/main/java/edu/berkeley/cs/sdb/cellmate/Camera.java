@@ -44,8 +44,6 @@ public class Camera {
     private CameraCaptureSession mCaptureSession;
     // A reference to the opened CameraDevice.
     private CameraDevice mCameraDevice;
-    // The android.util.Size of camera preview.
-    private Size mPreviewSize;
     // An additional thread for running tasks that shouldn't block the UI.
     private HandlerThread mBackgroundThread;
     // A Handler for running tasks in the background.
