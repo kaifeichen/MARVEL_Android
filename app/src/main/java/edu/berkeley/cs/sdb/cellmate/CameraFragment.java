@@ -1,6 +1,8 @@
 package edu.berkeley.cs.sdb.cellmate;
 
+import android.app.Activity;
 import android.Manifest;
+import android.app.Fragment;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
@@ -11,9 +13,11 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CaptureRequest;
 import android.hardware.camera2.params.StreamConfigurationMap;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
+import android.support.v13.app.FragmentCompat;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.util.Size;
@@ -24,17 +28,14 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 
-public class Camera {
-    private static Camera mInstance;
-    private static Context mContext;
-
-
+public class CameraFragment extends Fragment implements FragmentCompat.OnRequestPermissionsResultCallback  {
+    private static final int REQUEST_CAMERA_PERMISSION = 1;
     private static final String LOG_TAG = "CellMate";
 
-    private final Size mSize;
-    private List<OnCameraOpenedListener> mCameraOpenedListeners;
+    private Size mSize;
     private List<Surface> mSurfaces;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
@@ -50,31 +51,30 @@ public class Camera {
     private Handler mBackgroundHandler;
     // CaptureRequest.Builder for the camera preview
     private CaptureRequest.Builder mPreviewRequestBuilder;
-    private final CameraDevice.StateCallback mCameraDeviceStateCallback = new CameraDevice.StateCallback() {
+    private final CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
         @Override
-        public void onOpened(@NonNull CameraDevice camera) {
+        public void onOpened(@NonNull CameraDevice cameraDevice) {
             Log.i(LOG_TAG, "CameraDevice onOpened");
             mCameraOpenCloseLock.release();
-            mCameraDevice = camera;
+            mCameraDevice = cameraDevice;
             updatePreviewSession();
-            mCameraOpenedListeners.forEach((listener) -> listener.onOpened());
         }
 
         @Override
-        public void onDisconnected(@NonNull CameraDevice camera) {
+        public void onDisconnected(@NonNull CameraDevice cameraDevice) {
             Log.i(LOG_TAG, "CameraDevice onDisconnected");
             mCameraOpenCloseLock.release();
             mCameraDevice = null;
-            camera.close();
+            cameraDevice.close();
             throw new RuntimeException("Camera Device onDisconnected");
         }
 
         @Override
-        public void onError(@NonNull CameraDevice camera, int error) {
+        public void onError(@NonNull CameraDevice cameraDevice, int error) {
             Log.i(LOG_TAG, "CameraDevice onError");
             mCameraOpenCloseLock.release();
             mCameraDevice = null;
-            camera.close();
+            cameraDevice.close();
             throw new RuntimeException("Camera Device onError");
         }
     };
@@ -106,29 +106,48 @@ public class Camera {
         }
     };
 
-    private Camera(Context context, Size size) {
-        mContext = context;
-        mSize = size;
-        mCameraOpenedListeners = new LinkedList<>();
+    public static CameraFragment newInstance(Size size) {
+        CameraFragment cameraFragment = new CameraFragment();
+        cameraFragment.mSize = size;
+        return cameraFragment;
+    }
+
+    @Override
+    public void onActivityCreated(Bundle savedInstanceState) {
+        super.onActivityCreated(savedInstanceState);
+
         mSurfaces = new LinkedList<>();
     }
 
-    public static synchronized Camera getInstance(Context context, Size size) {
-        if (mInstance == null) {
-            mInstance = new Camera(context, size);
-        }
-        return mInstance;
+    @Override
+    public void onResume() {
+        super.onResume();
+        startBackgroundThread();
+
+        // open camera on resume, camera consumers should call registerPreviewSurface with a valid surface
+        openCamera();
     }
 
-    public boolean registerStateListener(OnCameraOpenedListener listener) {
-        if (mCameraOpenedListeners.contains(listener)) {
-            return false;
-        }
-        return mCameraOpenedListeners.add(listener);
+    @Override
+    public void onPause() {
+        closeCamera();
+        stopBackgroundThread();
+        super.onPause();
     }
 
-    public boolean unregisterStateListener(OnCameraOpenedListener listener) {
-        return mCameraOpenedListeners.remove(listener);
+    private void requestCameraPermission() {
+        FragmentCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        if (requestCode == REQUEST_CAMERA_PERMISSION) {
+            if (grantResults.length != 1 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                requestCameraPermission();
+            }
+        } else {
+            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        }
     }
 
     /**
@@ -138,7 +157,7 @@ public class Camera {
      * @return whether the operation succeeded
      */
     public boolean registerPreviewSurface(Surface surface) {
-        if (mSurfaces.contains(surface)) {
+        if (!surface.isValid() || mSurfaces.contains(surface)) {
             return false;
         }
         boolean success = mSurfaces.add(surface);
@@ -158,17 +177,19 @@ public class Camera {
         return success;
     }
 
-    public void open() {
-        if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            throw new RuntimeException("Camera Permission onError");
+    public void openCamera() {
+        Activity activity = getActivity();
+        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            requestCameraPermission();
+            return;
         }
         mCameraId = selectCamera();
-        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
         try {
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
-            manager.openCamera(mCameraId, mCameraDeviceStateCallback, mBackgroundHandler);
+            manager.openCamera(mCameraId, mStateCallback, mBackgroundHandler);
         } catch (CameraAccessException e) {
             throw new RuntimeException(e);
         } catch (InterruptedException e) {
@@ -179,7 +200,7 @@ public class Camera {
     /**
      * Closes the current CameraDevice.
      */
-    public void close() {
+    public void closeCamera() {
         try {
             mCameraOpenCloseLock.acquire();
             if (mCaptureSession != null) {
@@ -201,7 +222,8 @@ public class Camera {
      * Sets up member variables related to camera.
      */
     private String selectCamera() {
-        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
+        Activity activity = getActivity();
+        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
         try {
             for (String cameraId : manager.getCameraIdList()) {
                 CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
@@ -255,7 +277,9 @@ public class Camera {
     }
 
     private void updatePreviewSession() {
-        if (mSurfaces.isEmpty()) {
+        mSurfaces.removeIf(s -> !s.isValid());
+        // is camera is not opened, or there is no valid surface registered
+        if (mCameraDevice == null || mSurfaces.isEmpty()) {
             if (mCaptureSession != null) {
                 mCaptureSession.close();
                 mCaptureSession = null;
@@ -264,7 +288,11 @@ public class Camera {
             try {
                 // We set up a CaptureRequest.Builder with the output Surface.
                 mPreviewRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-                mSurfaces.forEach((surface) -> mPreviewRequestBuilder.addTarget(surface));
+                mSurfaces.forEach((surface) -> {
+                    if (surface.isValid()) {
+                        mPreviewRequestBuilder.addTarget(surface);
+                    }
+                });
 
                 // Here, we create a CameraCaptureSession for camera preview. It closes the previous session and its requests
                 mCameraDevice.createCaptureSession(mSurfaces, mSessionStateCallback, null);
@@ -272,9 +300,5 @@ public class Camera {
                 throw new RuntimeException(e);
             }
         }
-    }
-
-    public interface OnCameraOpenedListener {
-        void onOpened();
     }
 }

@@ -1,11 +1,9 @@
 package edu.berkeley.cs.sdb.cellmate;
 
-import android.Manifest;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.RectF;
@@ -15,9 +13,7 @@ import android.media.ImageReader;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
-import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
-import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Base64;
@@ -53,14 +49,14 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
     private static final String LOG_TAG = "CellMate";
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
-    private static final int REQUEST_CAMERA_PERMISSION = 1;
+
+    private OnSurfaceStateListener mOnSurfaceStateListener;
     private final int CIRCULAR_ARRAY_LENGTH = 10;
     private AutoFitTextureView mTextureView;
     private Surface mPreviewSurface;
     private TextView mTextView;
     private Button mOnButton;
     private Button mOffButton;
-    private Camera mCamera;
     // The android.util.Size of camera preview.
     private Size mPreviewSize;
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
@@ -70,10 +66,6 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         image.close();
         postImage(data);
     };
-    private final Camera.OnCameraOpenedListener mOnCameraOpenedListener = () -> {
-        mCamera.registerPreviewSurface(mPreviewSurface);
-        setButtonsEnabled(false, false);
-    };
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
@@ -82,7 +74,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
             mPreviewSurface = new Surface(surface);
 
             configureTransform(width, height);
-            mCamera.open();
+            mOnSurfaceStateListener.onSurfaceAvailable(mPreviewSurface);
         }
 
         @Override
@@ -92,7 +84,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
 
         @Override
         public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-            assert mCamera.unregisterPreviewSurface(mPreviewSurface);
+            mOnSurfaceStateListener.onSurfaceDestroyed(mPreviewSurface);
             mPreviewSurface = null;
             surface.release();
             return true;
@@ -210,8 +202,10 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         return max.getKey();
     }
 
-    public static PreviewFragment newInstance() {
-        return new PreviewFragment();
+    public static PreviewFragment newInstance(OnSurfaceStateListener onSurfaceStateListener) {
+        PreviewFragment previewFragment = new PreviewFragment();
+        previewFragment.mOnSurfaceStateListener = onSurfaceStateListener;
+        return previewFragment;
     }
 
     @Override
@@ -257,38 +251,22 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
         preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
-
-        mCamera = Camera.getInstance(activity, new Size(640, 480));
-        mCamera.registerStateListener(mOnCameraOpenedListener);
-
-        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestCameraPermission();
-        }
     }
 
     @Override
     public void onResume() {
         super.onResume();
-        mCamera.startBackgroundThread();
 
         // When the screen is turned off and turned back on, the SurfaceTexture is already
-        // available, and "onSurfaceTextureAvailable" will not be called. In that case, we can open
-        // a camera and start preview from here (otherwise, we wait until the surface is ready in
-        // the SurfaceTextureListener).
-        if (mTextureView.isAvailable()) {
-            mCamera.open();
-        } else {
-            mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
-        }
+        // available, and "onSurfaceTextureAvailable" will not be called. In that case, we open
+        // camera in the camera Fragment and start preview from there. Otherwise, we wait until the surface is ready in
+        // the SurfaceTextureListener.
     }
 
     @Override
     public void onPause() {
         mTargetObject = null;
         mTextView.setText(getString(R.string.none));
-
-        mCamera.close();
-        mCamera.stopBackgroundThread();
         super.onPause();
     }
 
@@ -310,21 +288,6 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         }
     }
 
-    private void requestCameraPermission() {
-        FragmentCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if (requestCode == REQUEST_CAMERA_PERMISSION) {
-            if (grantResults.length != 1 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-                showToast(getString(R.string.request_permission), Toast.LENGTH_LONG);
-                requestCameraPermission();
-            }
-        } else {
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        }
-    }
 
     private void initBosswaveClient() {
         // Use onSharedPreferenceChanged for reconnection if user changes BOSSWAVE router
@@ -424,5 +387,10 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         String grpcCellmateServerPort = preferences.getString(getString(R.string.grpc_server_port_key), getString(R.string.grpc_server_port_val));
 
         new GrpcReqImgTask(grpcCellmateServerAddr, Integer.valueOf(grpcCellmateServerPort), data, fx, fy, cx, cy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+    }
+
+    public interface OnSurfaceStateListener {
+        void onSurfaceAvailable(Surface surface);
+        void onSurfaceDestroyed(Surface surface);
     }
 }
