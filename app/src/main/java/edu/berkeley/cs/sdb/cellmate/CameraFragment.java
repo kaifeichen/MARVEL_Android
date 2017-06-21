@@ -28,13 +28,13 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 
 public class CameraFragment extends Fragment implements FragmentCompat.OnRequestPermissionsResultCallback  {
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     private static final String LOG_TAG = "CellMate";
 
+    private StateCallback mStateCallback;
     private List<Surface> mSurfaces;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
@@ -50,7 +50,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private Handler mBackgroundHandler;
     // CaptureRequest.Builder for the camera preview
     private CaptureRequest.Builder mPreviewRequestBuilder;
-    private final CameraDevice.StateCallback mStateCallback = new CameraDevice.StateCallback() {
+    private final CameraDevice.StateCallback mCameraStateCallback = new CameraDevice.StateCallback() {
         @Override
         public void onOpened(@NonNull CameraDevice cameraDevice) {
             Log.i(LOG_TAG, "CameraDevice onOpened");
@@ -113,6 +113,16 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         cameraFragment.setArguments(args);
 
         return cameraFragment;
+    }
+
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        try {
+            mStateCallback = (CameraFragment.StateCallback) context;
+        } catch (ClassCastException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -192,7 +202,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
-            manager.openCamera(mCameraId, mStateCallback, mBackgroundHandler);
+            manager.openCamera(mCameraId, mCameraStateCallback, mBackgroundHandler);
         } catch (CameraAccessException e) {
             throw new RuntimeException(e);
         } catch (InterruptedException e) {
@@ -246,6 +256,10 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 if (!imageSizes.contains(getArguments().getSize("size"))) {
                     continue;
                 }
+
+                int sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+                mStateCallback.onSensorOrientationChanged(sensorOrientation);
+
                 return cameraId;
             }
         } catch (CameraAccessException e) {
@@ -303,5 +317,9 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 throw new RuntimeException(e);
             }
         }
+    }
+
+    public interface StateCallback {
+        void onSensorOrientationChanged(int sensorOrientation);
     }
 }

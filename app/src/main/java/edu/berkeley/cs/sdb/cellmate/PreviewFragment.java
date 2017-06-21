@@ -5,10 +5,13 @@ import android.app.Fragment;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
+import android.graphics.Point;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
+import android.hardware.camera2.CameraManager;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.AsyncTask;
@@ -51,7 +54,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
 
-    private OnSurfaceAvailableListener mOnSurfaceAvailableListener;
+    private StateCallback mStateCallback;
     private final int CIRCULAR_ARRAY_LENGTH = 10;
     private AutoFitTextureView mTextureView;
     private Surface mPreviewSurface;
@@ -75,7 +78,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
             mPreviewSurface = new Surface(surface);
 
             configureTransform(width, height);
-            mOnSurfaceAvailableListener.onSurfaceAvailable(mPreviewSurface);
+            mStateCallback.onSurfaceAvailable(mPreviewSurface);
         }
 
         @Override
@@ -202,15 +205,21 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         return max.getKey();
     }
 
-    public static PreviewFragment newInstance() {
-        return new PreviewFragment();
+    public static PreviewFragment newInstance(Size size) {
+        PreviewFragment previewFragment = new PreviewFragment();
+
+        Bundle args = new Bundle();
+        args.putSize("size", size);
+        previewFragment.setArguments(args);
+
+        return previewFragment;
     }
 
     @Override
     public void onAttach(Context context) {
         super.onAttach(context);
         try {
-            mOnSurfaceAvailableListener = (OnSurfaceAvailableListener) context;
+            mStateCallback = (StateCallback) context;
         } catch (ClassCastException e) {
             throw new RuntimeException(e);
         }
@@ -293,6 +302,48 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
+        }
+    }
+
+    /**
+     * Update UI based on a sensor orientation
+     *
+     * @param sensorOrientation
+     */
+    public void updateSensorOrientation(int sensorOrientation) {
+        Activity activity = getActivity();
+        // Find out if we need to swap dimension to get the preview size relative to sensor coordinate.
+        int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
+        boolean swappedDimensions = false;
+        switch (displayRotation) {
+            case Surface.ROTATION_0:
+            case Surface.ROTATION_180:
+                if (sensorOrientation == 90 || sensorOrientation == 270) {
+                    swappedDimensions = true;
+                }
+                break;
+            case Surface.ROTATION_90:
+            case Surface.ROTATION_270:
+                if (sensorOrientation == 0 || sensorOrientation == 180) {
+                    swappedDimensions = true;
+                }
+                break;
+            default:
+                throw new RuntimeException("Display rotation is invalid: " + displayRotation);
+        }
+
+        mPreviewSize = getArguments().getSize("size");
+
+        if (swappedDimensions) {
+            mPreviewSize = new Size(mPreviewSize.getHeight(), mPreviewSize.getWidth());
+        }
+
+        // We fit the aspect ratio of TextureView to the size of preview we picked.
+        int orientation = getResources().getConfiguration().orientation;
+        if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
+            mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+        } else {
+            mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
         }
     }
 
@@ -397,7 +448,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         new GrpcReqImgTask(grpcCellmateServerAddr, Integer.valueOf(grpcCellmateServerPort), data, fx, fy, cx, cy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
-    public interface OnSurfaceAvailableListener {
+    public interface StateCallback {
         void onSurfaceAvailable(Surface surface);
     }
 }

@@ -7,8 +7,14 @@ import android.view.Surface;
 
 import com.splunk.mint.Mint;
 
-public class MainActivity extends AppCompatActivity implements PreviewFragment.OnSurfaceAvailableListener {
+public class MainActivity extends AppCompatActivity implements CameraFragment.StateCallback, PreviewFragment.StateCallback {
     private static final String MINT_API_KEY = "76da1102";
+
+    @Override
+    public void onSensorOrientationChanged(int sensorOrientation) {
+        PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(android.R.id.content);
+        previewFragment.updateSensorOrientation(sensorOrientation);
+    }
 
     @Override
     public void onSurfaceAvailable(Surface surface) {
@@ -23,10 +29,11 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.O
         Mint.initAndStartSession(this, MINT_API_KEY);
 
         if (savedInstanceState == null) {
-            CameraFragment cameraFragment = CameraFragment.newInstance(new Size(640, 480));
+            Size size = new Size(640, 480);
+            CameraFragment cameraFragment = CameraFragment.newInstance(size);
             getFragmentManager().beginTransaction().add(cameraFragment, getString(R.string.camera_fragment)).commit();
 
-            PreviewFragment previewFragment = PreviewFragment.newInstance();
+            PreviewFragment previewFragment = PreviewFragment.newInstance(size);
             getFragmentManager().beginTransaction().replace(android.R.id.content, previewFragment).commit();
         }
     }
