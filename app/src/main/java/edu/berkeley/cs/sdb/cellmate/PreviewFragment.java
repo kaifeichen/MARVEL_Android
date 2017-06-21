@@ -2,6 +2,7 @@ package edu.berkeley.cs.sdb.cellmate;
 
 import android.app.Activity;
 import android.app.Fragment;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.ImageFormat;
@@ -50,7 +51,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
 
-    private OnSurfaceStateListener mOnSurfaceStateListener;
+    private OnSurfaceAvailableListener mOnSurfaceAvailableListener;
     private final int CIRCULAR_ARRAY_LENGTH = 10;
     private AutoFitTextureView mTextureView;
     private Surface mPreviewSurface;
@@ -74,7 +75,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
             mPreviewSurface = new Surface(surface);
 
             configureTransform(width, height);
-            mOnSurfaceStateListener.onSurfaceAvailable(mPreviewSurface);
+            mOnSurfaceAvailableListener.onSurfaceAvailable(mPreviewSurface);
         }
 
         @Override
@@ -84,7 +85,6 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
 
         @Override
         public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-            mOnSurfaceStateListener.onSurfaceDestroyed(mPreviewSurface);
             mPreviewSurface = null;
             surface.release();
             return true;
@@ -202,10 +202,18 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         return max.getKey();
     }
 
-    public static PreviewFragment newInstance(OnSurfaceStateListener onSurfaceStateListener) {
-        PreviewFragment previewFragment = new PreviewFragment();
-        previewFragment.mOnSurfaceStateListener = onSurfaceStateListener;
-        return previewFragment;
+    public static PreviewFragment newInstance() {
+        return new PreviewFragment();
+    }
+
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        try {
+            mOnSurfaceAvailableListener = (OnSurfaceAvailableListener) context;
+        } catch (ClassCastException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -389,8 +397,7 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         new GrpcReqImgTask(grpcCellmateServerAddr, Integer.valueOf(grpcCellmateServerPort), data, fx, fy, cx, cy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
-    public interface OnSurfaceStateListener {
+    public interface OnSurfaceAvailableListener {
         void onSurfaceAvailable(Surface surface);
-        void onSurfaceDestroyed(Surface surface);
     }
 }

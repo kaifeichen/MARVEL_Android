@@ -35,7 +35,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     private static final String LOG_TAG = "CellMate";
 
-    private Size mSize;
     private List<Surface> mSurfaces;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
@@ -108,7 +107,11 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
 
     public static CameraFragment newInstance(Size size) {
         CameraFragment cameraFragment = new CameraFragment();
-        cameraFragment.mSize = size;
+
+        Bundle args = new Bundle();
+        args.putSize("size", size);
+        cameraFragment.setArguments(args);
+
         return cameraFragment;
     }
 
@@ -240,7 +243,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 }
 
                 List<Size> imageSizes = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG));
-                if (!imageSizes.contains(mSize)) {
+                if (!imageSizes.contains(getArguments().getSize("size"))) {
                     continue;
                 }
                 return cameraId;
