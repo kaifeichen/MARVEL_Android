@@ -117,21 +117,6 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
     private BosswaveClient mBosswaveClient;
     // Whethre the Bosswave Client is connected
     private boolean mIsBosswaveConnected;
-    // The current recognized object name
-    private String mTargetObject;
-    private final BwInitTask.Listener mBwInitTaskListener = (boolean success, BosswaveClient client) -> {
-        if (success) {
-            showToast("Bosswave connected", Toast.LENGTH_SHORT);
-            mBosswaveClient = client;
-            mIsBosswaveConnected = true;
-            if (mTargetObject != null) {
-                setButtonsEnabled(true, true);
-            }
-        } else {
-            mBosswaveClient = null;
-            showToast("Bosswave connection failed", Toast.LENGTH_SHORT);
-        }
-    };
     private final BwCloseTask.Listener mBwCloseTaskListener = (boolean success) -> {
         if (success) {
             showToast("Bosswave disconnected", Toast.LENGTH_SHORT);
@@ -151,6 +136,21 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
             } else {
                 initBosswaveClient();
             }
+        }
+    };
+    // The current recognized object name
+    private String mTargetObject;
+    private final BwInitTask.Listener mBwInitTaskListener = (boolean success, BosswaveClient client) -> {
+        if (success) {
+            showToast("Bosswave connected", Toast.LENGTH_SHORT);
+            mBosswaveClient = client;
+            mIsBosswaveConnected = true;
+            if (mTargetObject != null) {
+                setButtonsEnabled(true, true);
+            }
+        } else {
+            mBosswaveClient = null;
+            showToast("Bosswave connection failed", Toast.LENGTH_SHORT);
         }
     };
     private final View.OnClickListener mOnButtonOnClickListener = (View v) -> {
