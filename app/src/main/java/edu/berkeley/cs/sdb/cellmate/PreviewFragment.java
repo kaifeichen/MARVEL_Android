@@ -6,9 +6,14 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.ImageFormat;
 import android.graphics.Matrix;
+import android.graphics.Paint;
 import android.graphics.Point;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.hardware.camera2.CameraManager;
@@ -32,6 +37,7 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -47,6 +53,9 @@ import java.util.Map;
 
 import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
 import edu.berkeley.cs.sdb.bosswave.PayloadObject;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.stub.StreamObserver;
 
 
 public class PreviewFragment extends Fragment implements FragmentCompat.OnRequestPermissionsResultCallback {
@@ -55,7 +64,8 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
 
     private StateCallback mStateCallback;
-    private final int CIRCULAR_ARRAY_LENGTH = 10;
+    private static final int REQUEST_INTERVAL = 500;
+    private final int CIRCULAR_BUFFER_LENGTH = 10;
     private AutoFitTextureView mTextureView;
     private Surface mPreviewSurface;
     private TextView mTextView;
@@ -63,13 +73,148 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
     private Button mOffButton;
     // The android.util.Size of camera preview.
     private Size mPreviewSize;
+    private ImageView mHighLight;
+    private Long mLastTime;
+    Bitmap mBmp;
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
+        Long time = System.currentTimeMillis();
         Image image = reader.acquireLatestImage();
-        assert image.getFormat() == ImageFormat.JPEG;
-        ByteString data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
+        if (time - mLastTime > REQUEST_INTERVAL) {
+            ByteString data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
+            sendRequestToServer(data);
+            mLastTime = time;
+        }
         image.close();
-        postImage(data);
+
     };
+
+    String mHost;
+    String mPort;
+    double mFx;
+    double mFy;
+    double mCx;
+    double mCy;
+    ManagedChannel mChannel;
+    StreamObserver<CellmateProto.ClientQueryMessage> mRequestObserver;
+    StreamObserver<CellmateProto.ServerRespondMessage> mResponseObserver = new StreamObserver<CellmateProto.ServerRespondMessage>() {
+        @Override
+        public void onNext(CellmateProto.ServerRespondMessage value) {
+            final Activity activity = getActivity();
+            if (activity != null) {
+                activity.runOnUiThread(() -> {
+                    Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
+
+                    showToast(value.getName() + " recognized", Toast.LENGTH_SHORT);
+
+                    mRecentObjects.add(value.getName());
+                    if(mRecentObjects.size() > CIRCULAR_BUFFER_LENGTH) {
+                        mRecentObjects.remove(0);
+                    }
+                    mTargetObject = findCommon(mRecentObjects);
+
+
+                    if (mTargetObject == null || mTargetObject.equals("None")) {
+                        mTargetObject = null;
+                        mTextView.setText(getString(R.string.none));
+                        setButtonsEnabled(false, false);
+                    } else {
+                        mTextView.setText(mTargetObject);
+                        setButtonsEnabled(true, true);
+                        double x = value.getX();
+                        double y = value.getY();
+                        double width = value.getWidth();
+                        if(x != -1) {
+                            double right = 480 - y + width;
+                            double left = 480 - y - width;
+                            double bottom = x + width;
+                            double top = Math.max(0, x - width);
+                            Rect rect = new Rect((int)left,(int)top,(int)(right),(int)(bottom));
+
+                            Paint paint = new Paint();
+                            paint.setColor(Color.BLUE);
+                            paint.setStyle(Paint.Style.STROKE);
+                            if(mBmp != null && !mBmp.isRecycled()) {
+                                mBmp.recycle();
+                            }
+                            Bitmap mBmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+                            Canvas canvas = new Canvas(mBmp);
+                            canvas.drawRect(rect,paint);
+                            mHighLight.setImageBitmap(mBmp);
+                        } else {
+                            if(mBmp != null && !mBmp.isRecycled()) {
+                                mBmp.recycle();
+                            }
+                            Bitmap mBmp = Bitmap.createBitmap(480, 640,Bitmap.Config.ARGB_8888);
+                            mHighLight.setImageBitmap(mBmp);
+                        }
+                    }
+                });
+            }
+
+
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            showToast("Server is disconnected due to grpc error", Toast.LENGTH_LONG);
+            t.printStackTrace();
+        }
+
+        @Override
+        public void onCompleted() {
+            showToast("Server is disconnected due to grpc complete", Toast.LENGTH_LONG);
+        }
+    };
+    private void sendRequestToServer(ByteString data) {
+        Activity activity = getActivity();
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
+        double Fx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
+        double Fy = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fy_key), activity.getString(R.string.camera_fy_val)));
+        double Cx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_cx_key), activity.getString(R.string.camera_cx_val)));
+        double Cy = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_cy_key), activity.getString(R.string.camera_cy_val)));
+        String grpcCellmateServerAddr = preferences.getString(getString(R.string.grpc_server_addr_key), getString(R.string.grpc_server_addr_val));
+        String grpcCellmateServerPort = preferences.getString(getString(R.string.grpc_server_port_key), getString(R.string.grpc_server_port_val));
+        if(mHost != grpcCellmateServerAddr || mPort != grpcCellmateServerPort ||
+                mFx != Fx || mFy != Fy || mCx != Cx || mCy != Cy) {
+            mRequestObserver.onCompleted();
+            copyAllPreferenceValue();
+            mRequestObserver = createNewRequestObserver();
+        }
+
+        try {
+            CellmateProto.ClientQueryMessage request = CellmateProto.ClientQueryMessage.newBuilder()
+                    .setImage(data)
+                    .setFx(mFx)
+                    .setFy(mFy)
+                    .setCx(mCx)
+                    .setCy(mCy)
+                    .build();
+            mRequestObserver.onNext(request);
+            mRequestObserver.onNext(request);
+            mRequestObserver.onNext(request);
+        } catch (RuntimeException e) {
+            // Cancel RPC
+            showToast("Network Error", Toast.LENGTH_LONG);
+            mRequestObserver.onError(e);
+        }
+    }
+    void copyAllPreferenceValue() {
+        Activity activity = getActivity();
+        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
+        mFx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
+        mFy = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fy_key), activity.getString(R.string.camera_fy_val)));
+        mCx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_cx_key), activity.getString(R.string.camera_cx_val)));
+        mCy = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_cy_key), activity.getString(R.string.camera_cy_val)));
+        mHost = preferences.getString(getString(R.string.grpc_server_addr_key), getString(R.string.grpc_server_addr_val));
+        mPort = preferences.getString(getString(R.string.grpc_server_port_key), getString(R.string.grpc_server_port_val));
+    }
+
+    StreamObserver<CellmateProto.ClientQueryMessage> createNewRequestObserver() {
+        mChannel = ManagedChannelBuilder.forAddress(mHost, Integer.valueOf(mPort)).usePlaintext(true).build();
+        return GrpcServiceGrpc.newStub(mChannel).onClientQuery(mResponseObserver);
+    }
+
+
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
@@ -162,30 +307,8 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         }
     };
     private int mNextObjectIndex;
+
     private List<String> mRecentObjects;
-    private final GrpcReqImgTask.Listener mGrpcRecognitionListener = (String result) -> { // null means network error
-        Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
-
-        if (result == null) {
-            showToast("Network error", Toast.LENGTH_SHORT);
-            return;
-        }
-
-        mRecentObjects.add(mNextObjectIndex % CIRCULAR_ARRAY_LENGTH, result);
-        mTargetObject = findCommon(mRecentObjects);
-
-
-        if (mTargetObject == null || mTargetObject.equals("None")) {
-            mTargetObject = null;
-            mTextView.setText(getString(R.string.none));
-            setButtonsEnabled(false, false);
-        } else {
-            showToast(result + " recognized", Toast.LENGTH_SHORT);
-            mTextView.setText(mTargetObject);
-            setButtonsEnabled(true, true);
-        }
-    };
-
     private static String findCommon(List<String> objects) {
         Map<String, Integer> map = new HashMap<>();
 
@@ -241,9 +364,11 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
         mOffButton = (Button) view.findViewById(R.id.off);
         mOffButton.setOnClickListener(mOffButtonOnClickListener);
 
+        mHighLight = (ImageView) view.findViewById(R.id.imageView);
         setButtonsEnabled(false, false);
         setHasOptionsMenu(true);
 
+        mLastTime = System.currentTimeMillis();
         mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
 
         // hide action bar
@@ -263,27 +388,32 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
 
         mTargetObject = null;
         mNextObjectIndex = 0;
-        mRecentObjects = new ArrayList<>(CIRCULAR_ARRAY_LENGTH);
+        mRecentObjects = new ArrayList<>(CIRCULAR_BUFFER_LENGTH);
 
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
         preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
+
+
+        copyAllPreferenceValue();
+        mRequestObserver = createNewRequestObserver();
+
     }
 
     @Override
     public void onResume() {
         super.onResume();
 
-        // When the screen is turned off and turned back on, the SurfaceTexture is already
-        // available, and "onSurfaceTextureAvailable" will not be called. In that case, we open
-        // camera in the camera Fragment and start preview from there. Otherwise, we wait until the surface is ready in
-        // the SurfaceTextureListener.
+        copyAllPreferenceValue();
+        mRequestObserver = createNewRequestObserver();
     }
 
     @Override
     public void onPause() {
         mTargetObject = null;
         mTextView.setText(getString(R.string.none));
+        mRequestObserver.onCompleted();
+        mChannel.shutdown();
         super.onPause();
     }
 
@@ -433,19 +563,6 @@ public class PreviewFragment extends Fragment implements FragmentCompat.OnReques
                 mOffButton.setEnabled(off);
             });
         }
-    }
-
-    private void postImage(ByteString data) {
-        Activity activity = getActivity();
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
-        double fx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
-        double fy = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fy_key), activity.getString(R.string.camera_fy_val)));
-        double cx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_cx_key), activity.getString(R.string.camera_cx_val)));
-        double cy = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_cy_key), activity.getString(R.string.camera_cy_val)));
-        String grpcCellmateServerAddr = preferences.getString(getString(R.string.grpc_server_addr_key), getString(R.string.grpc_server_addr_val));
-        String grpcCellmateServerPort = preferences.getString(getString(R.string.grpc_server_port_key), getString(R.string.grpc_server_port_val));
-
-        new GrpcReqImgTask(grpcCellmateServerAddr, Integer.valueOf(grpcCellmateServerPort), data, fx, fy, cx, cy, mGrpcRecognitionListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
     }
 
     public interface StateCallback {
