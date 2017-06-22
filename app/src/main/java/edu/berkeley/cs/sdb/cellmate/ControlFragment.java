@@ -68,10 +68,9 @@ public class ControlFragment extends Fragment {
     double mFy;
     double mCx;
     double mCy;
+    private StateCallback mStateCallback;
     ManagedChannel mChannel;
     StreamObserver<CellmateProto.ClientQueryMessage> mRequestObserver;
-    private StateCallback mStateCallback;
-    private AutoFitTextureView mTextureView;
     private TextView mTextView;
     private Button mOnButton;
     private Button mOffButton;
@@ -141,7 +140,6 @@ public class ControlFragment extends Fragment {
             showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
         }
     };
-    private int mNextObjectIndex;
     private List<String> mRecentObjects;
     StreamObserver<CellmateProto.ServerRespondMessage> mResponseObserver = new StreamObserver<CellmateProto.ServerRespondMessage>() {
         @Override
@@ -158,7 +156,6 @@ public class ControlFragment extends Fragment {
                         mRecentObjects.remove(0);
                     }
                     mTargetObject = findCommon(mRecentObjects);
-
 
                     if (mTargetObject == null || mTargetObject.equals("None")) {
                         mTargetObject = null;
@@ -339,7 +336,6 @@ public class ControlFragment extends Fragment {
         initBosswaveClient();
 
         mTargetObject = null;
-        mNextObjectIndex = 0;
         mRecentObjects = new ArrayList<>(CIRCULAR_BUFFER_LENGTH);
 
         Activity activity = getActivity();
@@ -369,67 +365,6 @@ public class ControlFragment extends Fragment {
         super.onPause();
     }
 
-    @Override
-    public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
-        inflater.inflate(R.menu.menu, menu);
-        super.onCreateOptionsMenu(menu, inflater);
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-            case R.id.settings:
-                Intent intent = new Intent(getActivity(), SettingsActivity.class);
-                startActivity(intent);
-                return true;
-            default:
-                return super.onOptionsItemSelected(item);
-        }
-    }
-
-    /**
-     * Update UI based on a sensor orientation
-     *
-     * @param sensorOrientation
-     */
-    public void updateSensorOrientation(int sensorOrientation) {
-        Activity activity = getActivity();
-        // Find out if we need to swap dimension to get the preview size relative to sensor coordinate.
-        int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
-        boolean swappedDimensions = false;
-        switch (displayRotation) {
-            case Surface.ROTATION_0:
-            case Surface.ROTATION_180:
-                if (sensorOrientation == 90 || sensorOrientation == 270) {
-                    swappedDimensions = true;
-                }
-                break;
-            case Surface.ROTATION_90:
-            case Surface.ROTATION_270:
-                if (sensorOrientation == 0 || sensorOrientation == 180) {
-                    swappedDimensions = true;
-                }
-                break;
-            default:
-                throw new RuntimeException("Display rotation is invalid: " + displayRotation);
-        }
-
-        mPreviewSize = getArguments().getSize("size");
-
-        if (swappedDimensions) {
-            mPreviewSize = new Size(mPreviewSize.getHeight(), mPreviewSize.getWidth());
-        }
-
-        // We fit the aspect ratio of TextureView to the size of preview we picked.
-        int orientation = getResources().getConfiguration().orientation;
-        if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
-            mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-        } else {
-            mTextureView.setAspectRatio(mPreviewSize.getHeight(), mPreviewSize.getWidth());
-        }
-    }
-
-
     private void initBosswaveClient() {
         // Use onSharedPreferenceChanged for reconnection if user changes BOSSWAVE router
         if (!mIsBosswaveConnected && mBosswaveClient == null) {
@@ -450,40 +385,6 @@ public class ControlFragment extends Fragment {
             }
         }
     }
-
-    /**
-     * Configures the necessary {@link android.graphics.Matrix} transformation to `mTextureView`.
-     * This method should be called after the camera preview size is determined in
-     * setUpCameraOutputs and also the size of `mTextureView` is fixed.
-     *
-     * @param viewWidth  The width of `mTextureView`
-     * @param viewHeight The height of `mTextureView`
-     */
-    private void configureTransform(int viewWidth, int viewHeight) {
-        Activity activity = getActivity();
-        if (null == mTextureView || null == mPreviewSize || null == activity) {
-            return;
-        }
-        int rotation = activity.getWindowManager().getDefaultDisplay().getRotation();
-        Matrix matrix = new Matrix();
-        RectF viewRect = new RectF(0, 0, viewWidth, viewHeight);
-        RectF bufferRect = new RectF(0, 0, mPreviewSize.getHeight(), mPreviewSize.getWidth());
-        float centerX = viewRect.centerX();
-        float centerY = viewRect.centerY();
-        if (Surface.ROTATION_90 == rotation || Surface.ROTATION_270 == rotation) {
-            bufferRect.offset(centerX - bufferRect.centerX(), centerY - bufferRect.centerY());
-            matrix.setRectToRect(viewRect, bufferRect, Matrix.ScaleToFit.FILL);
-            float scale = Math.max(
-                    (float) viewHeight / mPreviewSize.getHeight(),
-                    (float) viewWidth / mPreviewSize.getWidth());
-            matrix.postScale(scale, scale, centerX, centerY);
-            matrix.postRotate(90 * (rotation - 2), centerX, centerY);
-        } else if (Surface.ROTATION_180 == rotation) {
-            matrix.postRotate(180, centerX, centerY);
-        }
-        mTextureView.setTransform(matrix);
-    }
-
     /**
      * Shows a Toast on the UI thread.
      *
@@ -518,6 +419,6 @@ public class ControlFragment extends Fragment {
     }
 
     public interface StateCallback {
-        void onSurfaceAvailable(Surface surface);
+        void onObjectIdentified(String name, double x, double y, double size);
     }
 }
