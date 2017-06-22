@@ -72,39 +72,9 @@ public class ControlFragment extends Fragment {
     StreamObserver<CellmateProto.ClientQueryMessage> mRequestObserver;
     private StateCallback mStateCallback;
     private AutoFitTextureView mTextureView;
-    private Surface mPreviewSurface;
     private TextView mTextView;
     private Button mOnButton;
     private Button mOffButton;
-    // The android.util.Size of camera preview.
-    private Size mPreviewSize;
-    private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
-        @Override
-        public void onSurfaceTextureAvailable(SurfaceTexture surface, int width, int height) {
-            Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
-
-            mPreviewSurface = new Surface(surface);
-
-            configureTransform(width, height);
-            mStateCallback.onSurfaceAvailable(mPreviewSurface);
-        }
-
-        @Override
-        public void onSurfaceTextureSizeChanged(SurfaceTexture surface, int width, int height) {
-            configureTransform(width, height);
-        }
-
-        @Override
-        public boolean onSurfaceTextureDestroyed(SurfaceTexture surface) {
-            mPreviewSurface = null;
-            surface.release();
-            return true;
-        }
-
-        @Override
-        public void onSurfaceTextureUpdated(SurfaceTexture surface) {
-        }
-    };
     private ImageView mHighLight;
     private Long mLastTime;
     // We keep a toast reference so it can be updated instantly
@@ -273,14 +243,8 @@ public class ControlFragment extends Fragment {
         return max.getKey();
     }
 
-    public static PreviewFragment newInstance(Size size) {
-        PreviewFragment previewFragment = new PreviewFragment();
-
-        Bundle args = new Bundle();
-        args.putSize("size", size);
-        previewFragment.setArguments(args);
-
-        return previewFragment;
+    public static ControlFragment newInstance() {
+        return new ControlFragment();
     }
 
     private void sendRequestToServer(ByteString data) {
@@ -346,13 +310,11 @@ public class ControlFragment extends Fragment {
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.camera_fragment, container, false);
+        return inflater.inflate(R.layout.control_fragment, container, false);
     }
 
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
-        mTextureView = (AutoFitTextureView) view.findViewById(R.id.texture);
-        mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
         mTextView = (TextView) view.findViewById(R.id.text);
         mOnButton = (Button) view.findViewById(R.id.on);
         mOnButton.setOnClickListener(mOnButtonOnClickListener);
@@ -365,11 +327,6 @@ public class ControlFragment extends Fragment {
 
         mLastTime = System.currentTimeMillis();
         mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
-
-        // hide action bar
-        ActionBar actionBar = ((AppCompatActivity) getActivity()).getSupportActionBar();
-        actionBar.setDisplayShowHomeEnabled(false);
-        actionBar.setDisplayShowTitleEnabled(false);
     }
 
     @Override
