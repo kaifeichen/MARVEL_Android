@@ -55,7 +55,7 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
 
 
-public class PreviewFragment extends Fragment {
+public class ControlFragment extends Fragment {
     private static final String LOG_TAG = "CellMate";
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
