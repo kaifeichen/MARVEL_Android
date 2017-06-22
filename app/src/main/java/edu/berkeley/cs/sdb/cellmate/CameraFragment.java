@@ -1,7 +1,7 @@
 package edu.berkeley.cs.sdb.cellmate;
 
-import android.app.Activity;
 import android.Manifest;
+import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
 import android.content.pm.PackageManager;
@@ -30,14 +30,13 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 
-public class CameraFragment extends Fragment implements FragmentCompat.OnRequestPermissionsResultCallback  {
+public class CameraFragment extends Fragment implements FragmentCompat.OnRequestPermissionsResultCallback {
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     private static final String LOG_TAG = "CellMate";
-
-    private StateCallback mStateCallback;
-    private List<Surface> mSurfaces;
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
+    private StateCallback mStateCallback;
+    private List<Surface> mSurfaces;
     // ID of the current CameraDevice
     private String mCameraId;
     // A CameraCaptureSession for camera preview.
@@ -50,33 +49,6 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     private Handler mBackgroundHandler;
     // CaptureRequest.Builder for the camera preview
     private CaptureRequest.Builder mPreviewRequestBuilder;
-    private final CameraDevice.StateCallback mCameraStateCallback = new CameraDevice.StateCallback() {
-        @Override
-        public void onOpened(@NonNull CameraDevice cameraDevice) {
-            Log.i(LOG_TAG, "CameraDevice onOpened");
-            mCameraOpenCloseLock.release();
-            mCameraDevice = cameraDevice;
-            updatePreviewSession();
-        }
-
-        @Override
-        public void onDisconnected(@NonNull CameraDevice cameraDevice) {
-            Log.i(LOG_TAG, "CameraDevice onDisconnected");
-            mCameraOpenCloseLock.release();
-            mCameraDevice = null;
-            cameraDevice.close();
-            throw new RuntimeException("Camera Device onDisconnected");
-        }
-
-        @Override
-        public void onError(@NonNull CameraDevice cameraDevice, int error) {
-            Log.i(LOG_TAG, "CameraDevice onError");
-            mCameraOpenCloseLock.release();
-            mCameraDevice = null;
-            cameraDevice.close();
-            throw new RuntimeException("Camera Device onError");
-        }
-    };
     private final CameraCaptureSession.StateCallback mSessionStateCallback = new CameraCaptureSession.StateCallback() {
         @Override
         public void onConfigured(@NonNull CameraCaptureSession session) {
@@ -102,6 +74,33 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         @Override
         public void onConfigureFailed(@NonNull CameraCaptureSession session) {
             throw new RuntimeException("on camera configure failed");
+        }
+    };
+    private final CameraDevice.StateCallback mCameraStateCallback = new CameraDevice.StateCallback() {
+        @Override
+        public void onOpened(@NonNull CameraDevice cameraDevice) {
+            Log.i(LOG_TAG, "CameraDevice onOpened");
+            mCameraOpenCloseLock.release();
+            mCameraDevice = cameraDevice;
+            updatePreviewSession();
+        }
+
+        @Override
+        public void onDisconnected(@NonNull CameraDevice cameraDevice) {
+            Log.i(LOG_TAG, "CameraDevice onDisconnected");
+            mCameraOpenCloseLock.release();
+            mCameraDevice = null;
+            cameraDevice.close();
+            throw new RuntimeException("Camera Device onDisconnected");
+        }
+
+        @Override
+        public void onError(@NonNull CameraDevice cameraDevice, int error) {
+            Log.i(LOG_TAG, "CameraDevice onError");
+            mCameraOpenCloseLock.release();
+            mCameraDevice = null;
+            cameraDevice.close();
+            throw new RuntimeException("Camera Device onError");
         }
     };
 
