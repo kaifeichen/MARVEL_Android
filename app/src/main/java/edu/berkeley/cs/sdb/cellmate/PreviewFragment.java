@@ -27,14 +27,18 @@ public class PreviewFragment extends Fragment {
     // The android.util.Size of camera preview.
     private Size mPreviewSize;
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+        Surface mTextureViewSurface;
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
             Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
 
-            Surface surface = new Surface(surfaceTexture);
+            mTextureViewSurface = new Surface(surfaceTexture);
 
-            configureTransform(width, height);
-            mStateCallback.onSurfaceAvailable(surface);
+//            configureTransform(width, height);
+            Camera camera = Camera.getInstance();
+            camera.registerPreviewSurface(mTextureViewSurface);
+            updateSensorOrientation(camera.getmSensorOrientation());
+            configureTransform(mTextureView.getWidth(), mTextureView.getHeight());
         }
 
         @Override
@@ -44,6 +48,8 @@ public class PreviewFragment extends Fragment {
 
         @Override
         public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
+            Camera camera = Camera.getInstance();
+            camera.unregisterPreviewSurface(mTextureViewSurface);
             surfaceTexture.release();
             return true;
         }
@@ -63,6 +69,8 @@ public class PreviewFragment extends Fragment {
 
         return previewFragment;
     }
+
+
 
     @Override
     public void onAttach(Context context) {
@@ -87,6 +95,8 @@ public class PreviewFragment extends Fragment {
 
         mHighLight = (ImageView) view.findViewById(R.id.imageView);
     }
+
+
 
 
     /**
@@ -164,7 +174,9 @@ public class PreviewFragment extends Fragment {
         mTextureView.setTransform(matrix);
     }
 
+
+
     public interface StateCallback {
-        void onSurfaceAvailable(Surface surface);
+
     }
 }

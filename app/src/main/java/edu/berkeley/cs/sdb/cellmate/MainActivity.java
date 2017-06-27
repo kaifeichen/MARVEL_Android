@@ -12,20 +12,11 @@ import android.view.Surface;
 
 import com.splunk.mint.Mint;
 
-public class MainActivity extends AppCompatActivity implements CameraFragment.StateCallback, PreviewFragment.StateCallback, ControlFragment.StateCallback {
+public class MainActivity extends AppCompatActivity implements PreviewFragment.StateCallback, ControlFragment.StateCallback {
     private static final String MINT_API_KEY = "76da1102";
 
-    @Override
-    public void onSensorOrientationChanged(int sensorOrientation) {
-        PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
-        previewFragment.updateSensorOrientation(sensorOrientation);
-    }
 
-    @Override
-    public void onSurfaceAvailable(Surface surface) {
-        CameraFragment cameraFragment = (CameraFragment) getFragmentManager().findFragmentByTag(getString(R.string.camera_fragment));
-        cameraFragment.registerPreviewSurface(surface);
-    }
+
 
     @Override
     public void onObjectIdentified(String name, double x, double y, double size) {
@@ -41,8 +32,8 @@ public class MainActivity extends AppCompatActivity implements CameraFragment.St
 
         if (savedInstanceState == null) {
             Size size = new Size(640, 480);
-            CameraFragment cameraFragment = CameraFragment.newInstance(size);
-            getFragmentManager().beginTransaction().add(cameraFragment, getString(R.string.camera_fragment)).commit();
+            Camera.getInstance(getApplicationContext(),size);
+
 
             PreviewFragment previewFragment = PreviewFragment.newInstance(size);
             getFragmentManager().beginTransaction().replace(R.id.preview_fragment, previewFragment).commit();
@@ -56,6 +47,8 @@ public class MainActivity extends AppCompatActivity implements CameraFragment.St
         actionBar.setDisplayShowHomeEnabled(false);
         actionBar.setDisplayShowTitleEnabled(false);
     }
+
+
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -75,4 +68,6 @@ public class MainActivity extends AppCompatActivity implements CameraFragment.St
                 return super.onOptionsItemSelected(item);
         }
     }
+
+
 }

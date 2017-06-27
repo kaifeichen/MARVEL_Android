@@ -9,6 +9,7 @@ import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Rect;
@@ -144,6 +145,7 @@ public class ControlFragment extends Fragment {
     StreamObserver<CellmateProto.ServerRespondMessage> mResponseObserver = new StreamObserver<CellmateProto.ServerRespondMessage>() {
         @Override
         public void onNext(CellmateProto.ServerRespondMessage value) {
+//            mStateCallback.onObjectIdentified(value.getName(),value.getX(),value.getY(),value.getWidth());
             final Activity activity = getActivity();
             if (activity != null) {
                 activity.runOnUiThread(() -> {
@@ -310,6 +312,7 @@ public class ControlFragment extends Fragment {
         return inflater.inflate(R.layout.control_fragment, container, false);
     }
 
+    ImageReader mImageReader;
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
         mTextView = (TextView) view.findViewById(R.id.text);
@@ -324,6 +327,12 @@ public class ControlFragment extends Fragment {
 
         mLastTime = System.currentTimeMillis();
         mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
+        Camera camera = Camera.getInstance();
+        Size cameraSize = camera.getCameraSize();
+        mImageReader = ImageReader.newInstance(cameraSize.getWidth(), cameraSize.getHeight(),
+                ImageFormat.JPEG, /*maxImages*/2);
+        mImageReader.setOnImageAvailableListener(
+                mOnImageAvailableListener, null);
     }
 
     @Override
@@ -354,6 +363,9 @@ public class ControlFragment extends Fragment {
 
         copyAllPreferenceValue();
         mRequestObserver = createNewRequestObserver();
+
+//        Camera camera = Camera.getInstance();
+//        camera.registerPreviewSurface(mImageReader.getSurface());
     }
 
     @Override
@@ -362,6 +374,9 @@ public class ControlFragment extends Fragment {
         mTextView.setText(getString(R.string.none));
         mRequestObserver.onCompleted();
         mChannel.shutdown();
+
+//        Camera camera = Camera.getInstance();
+//        camera.unregisterPreviewSurface(mImageReader.getSurface());
         super.onPause();
     }
 
@@ -417,6 +432,8 @@ public class ControlFragment extends Fragment {
             });
         }
     }
+
+
 
     public interface StateCallback {
         void onObjectIdentified(String name, double x, double y, double size);

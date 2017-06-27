@@ -30,12 +30,19 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
 
-public class CameraFragment extends Fragment implements FragmentCompat.OnRequestPermissionsResultCallback {
+public class Camera {
+    private static Camera mInstance;
+    private static Context mContext;
+    private final Size mSize;
+    private int mSensorOrientation;
+    private final Semaphore cameraOpened = new Semaphore(0, true);
+
+
+
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     private static final String LOG_TAG = "CellMate";
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
-    private StateCallback mStateCallback;
     private List<Surface> mSurfaces;
     // ID of the current CameraDevice
     private String mCameraId;
@@ -82,7 +89,8 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
             Log.i(LOG_TAG, "CameraDevice onOpened");
             mCameraOpenCloseLock.release();
             mCameraDevice = cameraDevice;
-            updatePreviewSession();
+            cameraOpened.release(1);
+//            updatePreviewSession();
         }
 
         @Override
@@ -104,63 +112,38 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         }
     };
 
-    public static CameraFragment newInstance(Size size) {
-        CameraFragment cameraFragment = new CameraFragment();
-
-        Bundle args = new Bundle();
-        args.putSize("size", size);
-        cameraFragment.setArguments(args);
-
-        return cameraFragment;
-    }
-
-    @Override
-    public void onAttach(Context context) {
-        super.onAttach(context);
-        try {
-            mStateCallback = (CameraFragment.StateCallback) context;
-        } catch (ClassCastException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @Override
-    public void onActivityCreated(Bundle savedInstanceState) {
-        super.onActivityCreated(savedInstanceState);
-
+    private Camera(Context context, Size size) {
+        mContext = context;
+        mSize = size;
         mSurfaces = new LinkedList<>();
     }
 
-    @Override
-    public void onResume() {
-        super.onResume();
-        startBackgroundThread();
-
-        // open camera on resume, camera consumers should call registerPreviewSurface with a valid surface
-        openCamera();
-    }
-
-    @Override
-    public void onPause() {
-        closeCamera();
-        stopBackgroundThread();
-        super.onPause();
-    }
-
-    private void requestCameraPermission() {
-        FragmentCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        if (requestCode == REQUEST_CAMERA_PERMISSION) {
-            if (grantResults.length != 1 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-                requestCameraPermission();
-            }
-        } else {
-            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    public static synchronized Camera getInstance(Context context, Size size) {
+        if (mInstance == null) {
+            mInstance = new Camera(context, size);
         }
+        return mInstance;
     }
+
+    public static synchronized Camera getInstance() {
+        assert(mInstance != null);
+        return mInstance;
+    }
+
+
+
+
+
+
+
+    public int getmSensorOrientation(){
+        return mSensorOrientation;
+    }
+
+
+
+
+
 
     /**
      * Register a surface where the camera will stream to
@@ -190,18 +173,27 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
     }
 
     public void openCamera() {
-        Activity activity = getActivity();
-        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            requestCameraPermission();
-            return;
+        startBackgroundThread();
+        if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            throw new RuntimeException("Camera Permission onError");
         }
+//        Activity activity = mContext.gegetActivity();
+//        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+//            requestCameraPermission();
+//            return;
+//        }
         mCameraId = selectCamera();
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
             if (!mCameraOpenCloseLock.tryAcquire(2500, TimeUnit.MILLISECONDS)) {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
             manager.openCamera(mCameraId, mCameraStateCallback, mBackgroundHandler);
+            try {
+                cameraOpened.acquire(1);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
         } catch (CameraAccessException e) {
             throw new RuntimeException(e);
         } catch (InterruptedException e) {
@@ -213,6 +205,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
      * Closes the current CameraDevice.
      */
     public void closeCamera() {
+        stopBackgroundThread();
         try {
             mCameraOpenCloseLock.acquire();
             if (mCaptureSession != null) {
@@ -234,8 +227,7 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
      * Sets up member variables related to camera.
      */
     private String selectCamera() {
-        Activity activity = getActivity();
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
             for (String cameraId : manager.getCameraIdList()) {
                 CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
@@ -252,12 +244,11 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 }
 
                 List<Size> imageSizes = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG));
-                if (!imageSizes.contains(getArguments().getSize("size"))) {
+                if (!imageSizes.contains(mSize)) {
                     continue;
                 }
 
-                int sensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-                mStateCallback.onSensorOrientationChanged(sensorOrientation);
+                mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
 
                 return cameraId;
             }
@@ -292,23 +283,32 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
         }
     }
 
+    private boolean isCameraOpen() {
+        return mCameraDevice != null && mCaptureSession != null;
+    }
     private void updatePreviewSession() {
-        mSurfaces.removeIf(s -> !s.isValid());
-        // is camera is not opened, or there is no valid surface registered
-        if (mCameraDevice == null || mSurfaces.isEmpty()) {
-            if (mCaptureSession != null) {
-                mCaptureSession.close();
-                mCaptureSession = null;
-            }
+//        mSurfaces.removeIf(s -> !s.isValid());
+        List<Surface> newSurfaces = new LinkedList<>();
+        for(Surface s : mSurfaces) {
+            if(s.isValid())
+            newSurfaces.add(s);
+        }
+        mSurfaces = newSurfaces;
+        // if there is no valid surface registered
+        if(mSurfaces.isEmpty()) {
+            closeCamera();
         } else {
+            if(!isCameraOpen()) {
+                openCamera();
+            }
             try {
                 // We set up a CaptureRequest.Builder with the output Surface.
                 mPreviewRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-                mSurfaces.forEach((surface) -> {
-                    if (surface.isValid()) {
-                        mPreviewRequestBuilder.addTarget(surface);
+                for(Surface s : mSurfaces) {
+                    if (s.isValid()) {
+                        mPreviewRequestBuilder.addTarget(s);
                     }
-                });
+                };
 
                 // Here, we create a CameraCaptureSession for camera preview. It closes the previous session and its requests
                 mCameraDevice.createCaptureSession(mSurfaces, mSessionStateCallback, null);
@@ -316,9 +316,17 @@ public class CameraFragment extends Fragment implements FragmentCompat.OnRequest
                 throw new RuntimeException(e);
             }
         }
+
+
     }
 
-    public interface StateCallback {
-        void onSensorOrientationChanged(int sensorOrientation);
+    public Size getCameraSize(){
+        return mSize;
     }
+
+//    public interface StateCallback {
+//        void onSensorOrientationChanged(int sensorOrientation);
+//    }
+
+
 }
