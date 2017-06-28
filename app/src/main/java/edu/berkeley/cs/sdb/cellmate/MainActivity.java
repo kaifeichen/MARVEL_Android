@@ -18,9 +18,40 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
 
 
 
+
     @Override
     public void onObjectIdentified(String name, double x, double y, double size) {
+        PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
+        if(previewFragment != null) {
+            previewFragment.drawHighlight(name, x, y, size);
+        }
+
     }
+
+
+
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        Camera camera = Camera.getInstance();
+        if(!camera.isOpen()) {
+            camera.openCamera();
+        }
+    }
+
+
+    @Override
+    protected void onPause() {
+        if(!isChangingConfigurations()) {
+            Camera camera = Camera.getInstance();
+            camera.closeCamera();
+        }
+        super.onPause();
+    }
+
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

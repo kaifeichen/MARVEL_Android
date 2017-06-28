@@ -31,11 +31,21 @@ import java.util.concurrent.TimeUnit;
 
 
 public class Camera {
+
+    public enum States {
+        IDLE,
+        OPENED,
+        OPENING
+    }
+
+    States mCameraState;
+    private final Semaphore mCameraStateLock = new Semaphore(1);
+
     private static Camera mInstance;
     private static Context mContext;
     private final Size mSize;
     private int mSensorOrientation;
-    private final Semaphore cameraOpened = new Semaphore(0, true);
+
 
 
 
@@ -60,10 +70,16 @@ public class Camera {
         @Override
         public void onConfigured(@NonNull CameraCaptureSession session) {
             // The camera is already closed
-            if (mCameraDevice == null) {
+            if (mCameraDevice == null || mSurfaces.isEmpty()) {
                 return;
             }
-
+            try {
+                mCameraStateLock.acquire();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            if (mCameraState!=States.OPENED) throw new AssertionError("Camera State wrong");
+            mCameraStateLock.release();
             // When the session is ready, we start displaying the preview.
             mCaptureSession = session;
             try {
@@ -75,6 +91,9 @@ public class Camera {
                 mCaptureSession.setRepeatingRequest(previewRequest, null, null);
             } catch (CameraAccessException e) {
                 throw new RuntimeException(e);
+            } catch (IllegalStateException e) {
+                //session close because another session was created
+                //the new session will trigger its onConfigured later
             }
         }
 
@@ -82,6 +101,8 @@ public class Camera {
         public void onConfigureFailed(@NonNull CameraCaptureSession session) {
             throw new RuntimeException("on camera configure failed");
         }
+
+
     };
     private final CameraDevice.StateCallback mCameraStateCallback = new CameraDevice.StateCallback() {
         @Override
@@ -89,8 +110,19 @@ public class Camera {
             Log.i(LOG_TAG, "CameraDevice onOpened");
             mCameraOpenCloseLock.release();
             mCameraDevice = cameraDevice;
-            cameraOpened.release(1);
-//            updatePreviewSession();
+            try {
+                mCameraStateLock.acquire();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            if (mCameraState!=States.OPENING) throw new AssertionError("Camera State wrong");
+            mCameraState = States.OPENED;
+            mCameraStateLock.release();
+            if(!mSurfaces.isEmpty()) {
+                Log.i("Cellmate","Update from onOpen");
+                updatePreviewSession();
+            }
+
         }
 
         @Override
@@ -110,9 +142,17 @@ public class Camera {
             cameraDevice.close();
             throw new RuntimeException("Camera Device onError");
         }
+
     };
 
     private Camera(Context context, Size size) {
+        try {
+            mCameraStateLock.acquire();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        mCameraState = States.IDLE;
+        mCameraStateLock.release();
         mContext = context;
         mSize = size;
         mSurfaces = new LinkedList<>();
@@ -131,7 +171,9 @@ public class Camera {
     }
 
 
-
+    public boolean isOpen(){
+        return mCameraState == States.OPENED;
+    }
 
 
 
@@ -149,39 +191,46 @@ public class Camera {
      * Register a surface where the camera will stream to
      *
      * @param surface
-     * @return whether the operation succeeded
      */
-    public boolean registerPreviewSurface(Surface surface) {
-        if (!surface.isValid() || mSurfaces.contains(surface)) {
-            return false;
-        }
-        boolean success = mSurfaces.add(surface);
-        updatePreviewSession();
-        return success;
+    public void registerPreviewSurface(Surface surface) {
+        mBackgroundHandler.post(()-> {
+            if (!surface.isValid() || mSurfaces.contains(surface)) {
+                return;
+            }
+            boolean success = mSurfaces.add(surface);
+            updatePreviewSession();
+        });
     }
 
     /**
      * Unregister a surface where the camera will stream to
      *
      * @param surface
-     * @return whether the operation succeeded
      */
-    public boolean unregisterPreviewSurface(Surface surface) {
-        boolean success = mSurfaces.remove(surface);
-        updatePreviewSession();
-        return success;
+    public void unregisterPreviewSurface(Surface surface) {
+        mBackgroundHandler.post(()-> {
+            mSurfaces.remove(surface);
+            updatePreviewSession();
+        });
     }
 
     public void openCamera() {
         startBackgroundThread();
+
+        Log.i("Camera Device", "openCamera");
+        try {
+            mCameraStateLock.acquire();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        if (mCameraState!=States.IDLE) throw new AssertionError("Camera State wrong");
+        mCameraState = States.OPENING;
+        mCameraStateLock.release();
+
         if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             throw new RuntimeException("Camera Permission onError");
         }
-//        Activity activity = mContext.gegetActivity();
-//        if (ContextCompat.checkSelfPermission(activity, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-//            requestCameraPermission();
-//            return;
-//        }
+
         mCameraId = selectCamera();
         CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
@@ -189,11 +238,6 @@ public class Camera {
                 throw new RuntimeException("Time out waiting to lock camera opening.");
             }
             manager.openCamera(mCameraId, mCameraStateCallback, mBackgroundHandler);
-            try {
-                cameraOpened.acquire(1);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
         } catch (CameraAccessException e) {
             throw new RuntimeException(e);
         } catch (InterruptedException e) {
@@ -205,7 +249,20 @@ public class Camera {
      * Closes the current CameraDevice.
      */
     public void closeCamera() {
-        stopBackgroundThread();
+        Log.i("Camera Device", "closeCamera");
+        if(mBackgroundThread != null) {
+            stopBackgroundThread();
+        }
+
+        try {
+            mCameraStateLock.acquire();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        if (mCameraState!=States.OPENED) throw new AssertionError("Camera State wrong");
+        mCameraState = States.IDLE;
+        mCameraStateLock.release();
+
         try {
             mCameraOpenCloseLock.acquire();
             if (mCaptureSession != null) {
@@ -221,12 +278,15 @@ public class Camera {
         } finally {
             mCameraOpenCloseLock.release();
         }
+
+
     }
 
     /**
      * Sets up member variables related to camera.
      */
     private String selectCamera() {
+        if (mCameraState!=States.OPENING) throw new AssertionError("Camera State wrong");
         CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
             for (String cameraId : manager.getCameraIdList()) {
@@ -283,39 +343,40 @@ public class Camera {
         }
     }
 
-    private boolean isCameraOpen() {
-        return mCameraDevice != null && mCaptureSession != null;
-    }
-    private void updatePreviewSession() {
-//        mSurfaces.removeIf(s -> !s.isValid());
-        List<Surface> newSurfaces = new LinkedList<>();
-        for(Surface s : mSurfaces) {
-            if(s.isValid())
-            newSurfaces.add(s);
-        }
-        mSurfaces = newSurfaces;
-        // if there is no valid surface registered
-        if(mSurfaces.isEmpty()) {
-            closeCamera();
-        } else {
-            if(!isCameraOpen()) {
-                openCamera();
-            }
-            try {
-                // We set up a CaptureRequest.Builder with the output Surface.
-                mPreviewRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-                for(Surface s : mSurfaces) {
-                    if (s.isValid()) {
-                        mPreviewRequestBuilder.addTarget(s);
-                    }
-                };
 
-                // Here, we create a CameraCaptureSession for camera preview. It closes the previous session and its requests
-                mCameraDevice.createCaptureSession(mSurfaces, mSessionStateCallback, null);
-            } catch (CameraAccessException e) {
-                throw new RuntimeException(e);
+
+    private void updatePreviewSession() {
+        Log.i("Cellmate","Get into update");
+        //Avoid race condition because surfaces canbe changed from different threads
+
+        if(mCameraState == States.OPENED) {
+            List<Surface> newSurfaces = new LinkedList<>();
+            for(Surface s : mSurfaces) {
+                if(s.isValid())
+                    newSurfaces.add(s);
+            }
+            mSurfaces = newSurfaces;
+
+            if(mSurfaces.isEmpty() && mCaptureSession != null) {
+                mCaptureSession.close();
+            } else {
+                try {
+                    // We set up a CaptureRequest.Builder with the output Surface.
+                    mPreviewRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
+                    for(Surface s : mSurfaces) {
+                        if (s.isValid()) {
+                            mPreviewRequestBuilder.addTarget(s);
+                        }
+                    };
+
+                    // Here, we create a CameraCaptureSession for camera preview. It closes the previous session and its requests
+                    mCameraDevice.createCaptureSession(mSurfaces, mSessionStateCallback, null);
+                } catch (CameraAccessException e) {
+                    throw new RuntimeException(e);
+                }
             }
         }
+
 
 
     }
@@ -323,6 +384,7 @@ public class Camera {
     public Size getCameraSize(){
         return mSize;
     }
+
 
 //    public interface StateCallback {
 //        void onSensorOrientationChanged(int sensorOrientation);

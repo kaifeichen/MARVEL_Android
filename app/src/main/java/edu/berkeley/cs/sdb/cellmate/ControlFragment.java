@@ -19,6 +19,7 @@ import android.media.Image;
 import android.media.ImageReader;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.os.Handler;
 import android.preference.PreferenceManager;
 import android.support.v13.app.FragmentCompat;
 import android.support.v7.app.ActionBar;
@@ -57,6 +58,8 @@ import io.grpc.stub.StreamObserver;
 
 
 public class ControlFragment extends Fragment {
+    private Handler mHandler;
+    private boolean mAttached;
     private static final String LOG_TAG = "CellMate";
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
@@ -75,7 +78,7 @@ public class ControlFragment extends Fragment {
     private TextView mTextView;
     private Button mOnButton;
     private Button mOffButton;
-    private ImageView mHighLight;
+
     private Long mLastTime;
     // We keep a toast reference so it can be updated instantly
     private Toast mToast;
@@ -145,58 +148,35 @@ public class ControlFragment extends Fragment {
     StreamObserver<CellmateProto.ServerRespondMessage> mResponseObserver = new StreamObserver<CellmateProto.ServerRespondMessage>() {
         @Override
         public void onNext(CellmateProto.ServerRespondMessage value) {
-//            mStateCallback.onObjectIdentified(value.getName(),value.getX(),value.getY(),value.getWidth());
+            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
+
             final Activity activity = getActivity();
             if (activity != null) {
                 activity.runOnUiThread(() -> {
-                    Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
+                    try {
+                        showToast(value.getName() + " recognized", Toast.LENGTH_SHORT);
 
-                    showToast(value.getName() + " recognized", Toast.LENGTH_SHORT);
-
-                    mRecentObjects.add(value.getName());
-                    if (mRecentObjects.size() > CIRCULAR_BUFFER_LENGTH) {
-                        mRecentObjects.remove(0);
-                    }
-                    mTargetObject = findCommon(mRecentObjects);
-
-                    if (mTargetObject == null || mTargetObject.equals("None")) {
-                        mTargetObject = null;
-                        mTextView.setText(getString(R.string.none));
-                        setButtonsEnabled(false, false);
-                    } else {
-                        mTextView.setText(mTargetObject);
-                        setButtonsEnabled(true, true);
-                        double x = value.getX();
-                        double y = value.getY();
-                        double width = value.getWidth();
-                        if (x != -1) {
-                            double right = 480 - y + width;
-                            double left = 480 - y - width;
-                            double bottom = x + width;
-                            double top = Math.max(0, x - width);
-                            Rect rect = new Rect((int) left, (int) top, (int) (right), (int) (bottom));
-
-                            Paint paint = new Paint();
-                            paint.setColor(Color.BLUE);
-                            paint.setStyle(Paint.Style.STROKE);
-                            if (mBmp != null && !mBmp.isRecycled()) {
-                                mBmp.recycle();
-                            }
-                            Bitmap mBmp = Bitmap.createBitmap(480, 640, Bitmap.Config.ARGB_8888);
-                            Canvas canvas = new Canvas(mBmp);
-                            canvas.drawRect(rect, paint);
-                            mHighLight.setImageBitmap(mBmp);
-                        } else {
-                            if (mBmp != null && !mBmp.isRecycled()) {
-                                mBmp.recycle();
-                            }
-                            Bitmap mBmp = Bitmap.createBitmap(480, 640, Bitmap.Config.ARGB_8888);
-                            mHighLight.setImageBitmap(mBmp);
+                        mRecentObjects.add(value.getName());
+                        if (mRecentObjects.size() > CIRCULAR_BUFFER_LENGTH) {
+                            mRecentObjects.remove(0);
                         }
+                        mTargetObject = findCommon(mRecentObjects);
+                        if (mTargetObject == null || mTargetObject.equals("None")) {
+                            mTargetObject = null;
+                            mTextView.setText(getString(R.string.none));
+                            setButtonsEnabled(false, false);
+                        } else {
+                            mStateCallback.onObjectIdentified(value.getName(), value.getX(), value.getY(), value.getWidth());
+                            mTextView.setText(mTargetObject);
+                            setButtonsEnabled(true, true);
+                        }
+                    } catch (IllegalStateException e) {
+                        //Do nothing
+                        //To fix "Fragment ControlFragment{2dab555} not attached to Activity"
                     }
                 });
-            }
 
+            }
 
         }
 
@@ -211,15 +191,42 @@ public class ControlFragment extends Fragment {
             showToast("Server is disconnected due to grpc complete", Toast.LENGTH_LONG);
         }
     };
+
+
+
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
-        Long time = System.currentTimeMillis();
-        Image image = reader.acquireLatestImage();
-        if (time - mLastTime > REQUEST_INTERVAL) {
-            ByteString data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
-            sendRequestToServer(data);
-            mLastTime = time;
+        if(mAttached) {
+            Long time = System.currentTimeMillis();
+            Image image = reader.acquireLatestImage();
+            if (time - mLastTime > REQUEST_INTERVAL) {
+                ByteString data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
+                image.close();
+                Runnable senderRunnable = new Runnable() {
+                    ByteString mData;
+                    @Override
+                    public void run() {
+                        sendRequestToServer(mData);
+                    }
+
+                    public Runnable init(ByteString data) {
+                        mData = data;
+                        return(this);
+                    }
+                }.init(data);
+                mHandler.post(senderRunnable);
+                //sendRequestToServer(data);
+                mLastTime = time;
+            } else {
+                try{
+                    image.close();
+                } catch (NullPointerException e) {
+
+                }
+
+            }
         }
-        image.close();
+
+
 
     };
 
@@ -271,8 +278,6 @@ public class ControlFragment extends Fragment {
                     .setCy(mCy)
                     .build();
             mRequestObserver.onNext(request);
-            mRequestObserver.onNext(request);
-            mRequestObserver.onNext(request);
         } catch (RuntimeException e) {
             // Cancel RPC
             showToast("Network Error", Toast.LENGTH_LONG);
@@ -321,7 +326,7 @@ public class ControlFragment extends Fragment {
         mOffButton = (Button) view.findViewById(R.id.off);
         mOffButton.setOnClickListener(mOffButtonOnClickListener);
 
-        mHighLight = (ImageView) view.findViewById(R.id.imageView);
+
         setButtonsEnabled(false, false);
         setHasOptionsMenu(true);
 
@@ -333,6 +338,7 @@ public class ControlFragment extends Fragment {
                 ImageFormat.JPEG, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(
                 mOnImageAvailableListener, null);
+        mHandler = new Handler();
     }
 
     @Override
@@ -363,20 +369,25 @@ public class ControlFragment extends Fragment {
 
         copyAllPreferenceValue();
         mRequestObserver = createNewRequestObserver();
-
-//        Camera camera = Camera.getInstance();
-//        camera.registerPreviewSurface(mImageReader.getSurface());
+        mAttached = true;
+        Camera camera = Camera.getInstance();
+        Log.i("CellMate","control fragment register++++");
+        camera.registerPreviewSurface(mImageReader.getSurface());
     }
 
     @Override
     public void onPause() {
+        mAttached = false;
         mTargetObject = null;
         mTextView.setText(getString(R.string.none));
         mRequestObserver.onCompleted();
         mChannel.shutdown();
 
-//        Camera camera = Camera.getInstance();
-//        camera.unregisterPreviewSurface(mImageReader.getSurface());
+        Camera camera = Camera.getInstance();
+        Log.i("CellMate","control fragment unregister");
+        camera.unregisterPreviewSurface(mImageReader.getSurface());
+
+        mHandler.removeCallbacksAndMessages(null);
         super.onPause();
     }
 
@@ -432,6 +443,8 @@ public class ControlFragment extends Fragment {
             });
         }
     }
+
+
 
 
 
