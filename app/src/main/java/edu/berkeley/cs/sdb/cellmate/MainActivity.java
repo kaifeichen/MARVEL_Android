@@ -9,6 +9,7 @@ import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.Surface;
+import android.view.WindowManager;
 
 import com.splunk.mint.Mint;
 
@@ -61,12 +62,14 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
 
         setContentView(R.layout.main_activity);
 
+        this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
         if (savedInstanceState == null) {
             Size size = new Size(640, 480);
             Camera.getInstance(getApplicationContext(),size);
 
 
-            PreviewFragment previewFragment = PreviewFragment.newInstance(size);
+            PreviewFragment previewFragment = PreviewFragment.newInstance();
             getFragmentManager().beginTransaction().replace(R.id.preview_fragment, previewFragment).commit();
 
             ControlFragment controlFragment = ControlFragment.newInstance();

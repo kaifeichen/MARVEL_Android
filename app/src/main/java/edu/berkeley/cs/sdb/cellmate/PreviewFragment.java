@@ -23,6 +23,11 @@ import android.view.ViewGroup;
 import android.widget.ImageView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+
 
 public class PreviewFragment extends Fragment {
     private static final String LOG_TAG = "CellMate";
@@ -38,14 +43,25 @@ public class PreviewFragment extends Fragment {
         public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
             Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
 
+
+
+
+            Camera camera = Camera.getInstance();
+
+
+            mPreviewSize = camera.getBestPreviewSize(width,height);
+
+            updateSensorOrientation();
+            configureTransform(width, height);
+
+            // We configure the size of default buffer to be the size of camera preview we want.
+            surfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+
             mTextureViewSurface = new Surface(surfaceTexture);
 
-//            configureTransform(width, height);
-            Camera camera = Camera.getInstance();
             Log.i("CellMate","preview fragment register++++");
             camera.registerPreviewSurface(mTextureViewSurface);
-            updateSensorOrientation(camera.getmSensorOrientation());
-            configureTransform(mTextureView.getWidth(), mTextureView.getHeight());
+//            configureTransform(mTextureView.getWidth(), mTextureView.getHeight());
         }
 
         @Override
@@ -66,12 +82,8 @@ public class PreviewFragment extends Fragment {
     };
     private ImageView mHighLight;
 
-    public static PreviewFragment newInstance(Size size) {
+    public static PreviewFragment newInstance() {
         PreviewFragment previewFragment = new PreviewFragment();
-
-        Bundle args = new Bundle();
-        args.putSize("size", size);
-        previewFragment.setArguments(args);
 
         return previewFragment;
     }
@@ -128,37 +140,9 @@ public class PreviewFragment extends Fragment {
     /**
      * Update UI based on a sensor orientation
      *
-     * @param sensorOrientation
+     *
      */
-    public void updateSensorOrientation(int sensorOrientation) {
-        Activity activity = getActivity();
-        // Find out if we need to swap dimension to get the preview size relative to sensor coordinate.
-        int displayRotation = activity.getWindowManager().getDefaultDisplay().getRotation();
-        boolean swappedDimensions = false;
-        switch (displayRotation) {
-            case Surface.ROTATION_0:
-            case Surface.ROTATION_180:
-                if (sensorOrientation == 90 || sensorOrientation == 270) {
-                    swappedDimensions = true;
-                }
-                break;
-            case Surface.ROTATION_90:
-            case Surface.ROTATION_270:
-                if (sensorOrientation == 0 || sensorOrientation == 180) {
-                    swappedDimensions = true;
-                }
-                break;
-            default:
-                throw new RuntimeException("Display rotation is invalid: " + displayRotation);
-        }
-
-        mPreviewSize = getArguments().getSize("size");
-
-        if (swappedDimensions) {
-            mPreviewSize = new Size(mPreviewSize.getHeight(), mPreviewSize.getWidth());
-        }
-
-        // We fit the aspect ratio of TextureView to the size of preview we picked.
+    public void updateSensorOrientation() {
         int orientation = getResources().getConfiguration().orientation;
         if (orientation == Configuration.ORIENTATION_LANDSCAPE) {
             mTextureView.setAspectRatio(mPreviewSize.getWidth(), mPreviewSize.getHeight());
@@ -231,6 +215,10 @@ public class PreviewFragment extends Fragment {
             });
         }
     }
+
+
+
+
 
     public interface StateCallback {
 
