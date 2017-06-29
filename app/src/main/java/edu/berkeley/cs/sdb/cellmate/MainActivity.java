@@ -1,5 +1,7 @@
 package edu.berkeley.cs.sdb.cellmate;
 
+import android.app.FragmentManager;
+import android.app.FragmentTransaction;
 import android.content.Intent;
 import android.os.Bundle;
 import android.support.v7.app.ActionBar;
@@ -97,6 +99,20 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
             case R.id.settings:
                 Intent intent = new Intent(this, SettingsActivity.class);
                 startActivity(intent);
+                return true;
+            case R.id.calibration:
+                FragmentManager fm = getFragmentManager();
+                FragmentTransaction ft = fm.beginTransaction();
+                CalibrationFragment calibrationFragment = new CalibrationFragment();
+                ft.replace(R.id.task_fragment, calibrationFragment);
+                ft.commit();
+                return true;
+            case R.id.control:
+                FragmentManager fm2 = getFragmentManager();
+                FragmentTransaction ft2 = fm2.beginTransaction();
+                ControlFragment controlFragment = ControlFragment.newInstance();
+                ft2.replace(R.id.task_fragment, controlFragment);
+                ft2.commit();
                 return true;
             default:
                 return super.onOptionsItemSelected(item);

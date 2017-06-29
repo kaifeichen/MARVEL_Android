@@ -10,6 +10,15 @@
         android:numeric="integer"
         android:title="@string/grpc_server_port_title" />
     <EditTextPreference
+        android:defaultValue="@string/calibration_server_addr_val"
+        android:key="@string/calibration_server_addr_key"
+        android:title="@string/calibration_server_addr_title" />
+    <EditTextPreference
+        android:defaultValue="@string/calibration_server_port_val"
+        android:key="@string/calibration_server_port_key"
+        android:numeric="integer"
+        android:title="@string/calibration_server_port_title" />
+    <EditTextPreference
         android:defaultValue="@string/bosswave_router_addr_val"
         android:key="@string/bosswave_router_addr_key"
         android:title="@string/bosswave_router_addr_title"/>
