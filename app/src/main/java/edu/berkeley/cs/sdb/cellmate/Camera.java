@@ -24,6 +24,7 @@ import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
 import android.support.v13.app.FragmentCompat;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.util.Size;
@@ -84,6 +85,12 @@ public class Camera {
      *
      */
     private int mState = STATE_PREVIEW;
+
+
+
+
+
+
 
 
     public enum States {
@@ -311,8 +318,18 @@ public class Camera {
         });
     }
 
+    private void requestCameraPermission() {
+        ActivityCompat.requestPermissions((Activity)mContext, new String[] {Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
+
+    }
+
     public void openCamera() {
         startBackgroundThread();
+
+        if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestCameraPermission();
+        }
 
         Log.i("Camera Device", "openCamera");
         try {

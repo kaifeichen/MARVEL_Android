@@ -30,6 +30,7 @@ import java.util.List;
 
 
 public class PreviewFragment extends Fragment {
+
     private static final String LOG_TAG = "CellMate";
     Bitmap mBmp;
     private StateCallback mStateCallback;

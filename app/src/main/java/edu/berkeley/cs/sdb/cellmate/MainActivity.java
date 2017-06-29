@@ -3,7 +3,10 @@ package edu.berkeley.cs.sdb.cellmate;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
+import android.support.v13.app.FragmentCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Size;
@@ -13,14 +16,23 @@ import android.view.MenuItem;
 import android.view.Surface;
 import android.view.WindowManager;
 
+import com.google.common.util.concurrent.ExecutionError;
 import com.splunk.mint.Mint;
 
 public class MainActivity extends AppCompatActivity implements PreviewFragment.StateCallback, ControlFragment.StateCallback {
     private static final String MINT_API_KEY = "76da1102";
 
+    private static final int REQUEST_CAMERA_PERMISSION = 1;
 
-
-
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
+                                           @NonNull int[] grantResults) {
+        if (requestCode == REQUEST_CAMERA_PERMISSION) {
+            if (grantResults.length != 1 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
+                throw new NullPointerException("Camera no permission");
+            }
+        }
+    }
 
     @Override
     public void onObjectIdentified(String name, double x, double y, double size) {
@@ -60,6 +72,8 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+
+
         Mint.initAndStartSession(this, MINT_API_KEY);
 
         setContentView(R.layout.main_activity);
@@ -68,7 +82,7 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
 
         if (savedInstanceState == null) {
             Size size = new Size(640, 480);
-            Camera.getInstance(getApplicationContext(),size);
+            Camera.getInstance(this,size);
 
 
             PreviewFragment previewFragment = PreviewFragment.newInstance();
