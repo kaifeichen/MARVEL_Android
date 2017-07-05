@@ -29,6 +29,7 @@ import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
+import android.view.OrientationEventListener;
 import android.view.Surface;
 import android.view.WindowManager;
 
@@ -43,6 +44,9 @@ import java.util.concurrent.TimeUnit;
 
 
 public class Camera {
+
+    private OrientationEventListener mOrientationEventListener;
+    private int mDeviceOrientation;
     /**
      * Conversion from screen rotation to JPEG orientation.
      */
@@ -229,12 +233,22 @@ public class Camera {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
+
         mCameraState = States.IDLE;
         mCameraStateLock.release();
         mContext = context;
         mSize = size;
         mSurfaces = new LinkedList<>();
         mCaptureSurfaces = new LinkedList<>();
+        mOrientationEventListener = new OrientationEventListener(mContext)
+        {
+            @Override
+            public void onOrientationChanged(int orientation)
+            {
+                mDeviceOrientation =((orientation + 45) / 90 * 90)%360;
+            }
+        };
+        mOrientationEventListener.enable();
     }
 
     public static synchronized Camera getInstance(Context context, Size size) {
@@ -396,6 +410,7 @@ public class Camera {
 
     }
 
+    CameraCharacteristics mCharacteristics;
     /**
      * Sets up member variables related to camera.
      */
@@ -404,15 +419,15 @@ public class Camera {
         CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
             for (String cameraId : manager.getCameraIdList()) {
-                CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
+                mCharacteristics = manager.getCameraCharacteristics(cameraId);
 
                 // We don't use a front facing camera
-                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                Integer facing = mCharacteristics.get(CameraCharacteristics.LENS_FACING);
                 if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
                     continue;
                 }
 
-                StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                StreamConfigurationMap map = mCharacteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
                 if (map == null) {
                     continue;
                 }
@@ -422,7 +437,7 @@ public class Camera {
                     continue;
                 }
 
-                mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
+                mSensorOrientation = mCharacteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
 
                 return cameraId;
             }
@@ -798,9 +813,9 @@ public class Camera {
 
 
             // Orientation
+            //Always 0 because of set to portrait
             int rotation = ((WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION, getOrientation(rotation));
-
             CameraCaptureSession.CaptureCallback CaptureCallback
                     = new CameraCaptureSession.CaptureCallback() {
 
@@ -852,8 +867,7 @@ public class Camera {
         }
     }
 
-
-
-
-
+    public int getDeviceOrientation() {
+        return mDeviceOrientation;
+    }
 }

@@ -6,18 +6,14 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
-import android.support.v13.app.FragmentCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Size;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
-import android.view.OrientationEventListener;
-import android.view.Surface;
 import android.view.WindowManager;
 
-import com.google.common.util.concurrent.ExecutionError;
 import com.splunk.mint.Mint;
 
 public class MainActivity extends AppCompatActivity implements PreviewFragment.StateCallback, ControlFragment.StateCallback {
@@ -33,8 +29,6 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
     Mode mMode = Mode.NULL;
     private static final String TAG_CALIBRATION_FRAGMENT = "CalibrationFragment";
     CalibrationFragment mCalibrationFragment;
-
-
 
 
 
@@ -112,6 +106,10 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
         ActionBar actionBar = getSupportActionBar();
         actionBar.setDisplayShowHomeEnabled(false);
         actionBar.setDisplayShowTitleEnabled(false);
+
+
+
+
     }
 
 
@@ -150,12 +148,4 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
                 return super.onOptionsItemSelected(item);
         }
     }
-
-
-
-
-
-
-
-
 }
