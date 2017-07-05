@@ -41,8 +41,21 @@ public class CalibrationFragment extends Fragment {
     private Toast mToast;
 
     TextView mProgressText;
+    String mProgressTextContents;
     ProgressBar mProgressBar;
     Button mCaptureButton;
+    String mCaptureButtonContents;
+
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // retain this fragment
+        setRetainInstance(true);
+        mImages = new ArrayList<>();
+        mProgressTextContents = String.valueOf(mImages.size()) + "/" + String.valueOf(mTotal);
+        mCaptureButtonContents = getString(R.string.capture);
+        mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
+    }
 
     @Nullable
     @Override
@@ -53,20 +66,33 @@ public class CalibrationFragment extends Fragment {
     @Override
     public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
         mProgressText = (TextView) view.findViewById(R.id.progressText);
+        mProgressText.setText(mProgressTextContents);
         mProgressBar = (ProgressBar) view.findViewById(R.id.progressBar);
         mProgressBar.setMax(mTotal);
+        mProgressBar.setProgress(mImages.size());
         mCaptureButton = (Button) view.findViewById(R.id.capture);
-        mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
+        mCaptureButton.setText(mCaptureButtonContents);
         mCaptureButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 // Code here executes on main thread after user presses button
-                setButtonsEnabled(false);
-                takePicture();
+                if(mCaptureButton.getText() == getString(R.string.capture)) {
+                    setButtonsEnabled(false);
+                    takePicture();
+                } else if(mCaptureButton.getText() == getString(R.string.calibrate_again)){
+                    mCaptureButton.setText(getString(R.string.capture));
+                    mCaptureButtonContents = getString(R.string.capture);
+                    mImages.clear();
+                    mProgressBar.setProgress(0);
+                    mProgressTextContents = String.valueOf(mImages.size()) + "/" + String.valueOf(mTotal);
+                    mProgressText.setText(mProgressTextContents);
+
+                }
+
             }
         });
         Camera camera = Camera.getInstance();
         Size cameraSize = camera.getCameraSize();
-        mImages = new ArrayList<>();
+
         mImageReader = ImageReader.newInstance(cameraSize.getWidth(), cameraSize.getHeight(),
                 ImageFormat.JPEG, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(
@@ -112,9 +138,11 @@ public class CalibrationFragment extends Fragment {
                 buffer.get(bytes);
                 mImages.add(ByteString.copyFrom(bytes));
                 mProgressBar.setProgress(mImages.size());
-                mProgressText.setText(String.valueOf(mImages.size()) + "/" + String.valueOf(mTotal));
+                mProgressTextContents = String.valueOf(mImages.size()) + "/" + String.valueOf(mTotal);
+                mProgressText.setText(mProgressTextContents);
                 if(mImages.size() >= mTotal) {
-                    mProgressText.setText("Calibrating...");
+                    mProgressTextContents = "Calibrating...";
+                    mProgressText.setText(mProgressTextContents);
                     final Activity activity = getActivity();
                     if (activity != null) {
                         activity.runOnUiThread(new GrpcPostImageRunnable());
@@ -167,36 +195,28 @@ public class CalibrationFragment extends Fragment {
         @Override
         public void onResponse(double[] matrix) { // null means network error
             if (matrix == null) {
-                showToast("Network error", Toast.LENGTH_SHORT);
+                mProgressTextContents = "Calibration Failed, Please make sure:\n" +
+                        "1. Your camera is capturing Chessbord picture\n" +
+                        "2. Your phone has internet access\n" +
+                        "3. Calibration server host and port in setting is correctly settled";
+                mProgressText.setText(mProgressTextContents);
             } else {
-//                Activity activity = getActivity();
-//                SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
-//                SharedPreferences.Editor editor = preferences.edit();
-//                editor.putLong(getString(R.string.camera_fx_key), 10);
-//                editor.commit();
+                Activity activity = getActivity();
+                SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
+                SharedPreferences.Editor editor = preferences.edit();
+                editor.putString(getString(R.string.camera_fx_key), Double.toString(matrix[0]));
+                editor.putString(getString(R.string.camera_fy_key), Double.toString(matrix[1]));
+                editor.putString(getString(R.string.camera_cx_key), Double.toString(matrix[2]));
+                editor.putString(getString(R.string.camera_cy_key), Double.toString(matrix[3]));
+                editor.apply();
 
-                showToast(String.valueOf(matrix[0]) + " " +
-                        String.valueOf(matrix[1]) + " " +
-                        String.valueOf(matrix[2]) + " " +
-                        String.valueOf(matrix[3]) + " " , Toast.LENGTH_LONG);
+                mProgressTextContents = "Calibration Done, Result is saved to Settings";
+                mProgressText.setText(mProgressTextContents);
             }
+            mCaptureButton.setText(getString(R.string.calibrate_again));
+            mCaptureButtonContents = getString(R.string.calibrate_again);
         }
     };
 
-    /**
-     * Shows a Toast on the UI thread.
-     *
-     * @param text     The message to show
-     * @param duration How long to display the message. Either LENGTH_SHORT or LENGTH_LONG
-     */
-    private void showToast(final String text, final int duration) {
-        final Activity activity = getActivity();
-        if (activity != null) {
-            activity.runOnUiThread(() -> {
-                mToast.setText(text);
-                mToast.setDuration(duration);
-                mToast.show();
-            });
-        }
-    }
+
 }

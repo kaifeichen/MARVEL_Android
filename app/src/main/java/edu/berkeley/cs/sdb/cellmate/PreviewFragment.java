@@ -3,6 +3,7 @@ package edu.berkeley.cs.sdb.cellmate;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -67,6 +68,7 @@ public class PreviewFragment extends Fragment {
 
         @Override
         public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int width, int height) {
+            Log.i(LOG_TAG, "onSurfaceTextureSizeChanged, width=" + width + ",height=" + height);
             configureTransform(width, height);
         }
 
@@ -100,6 +102,8 @@ public class PreviewFragment extends Fragment {
             throw new RuntimeException(e);
         }
     }
+
+
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,

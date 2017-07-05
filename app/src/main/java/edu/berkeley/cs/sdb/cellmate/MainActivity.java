@@ -13,6 +13,7 @@ import android.util.Size;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.OrientationEventListener;
 import android.view.Surface;
 import android.view.WindowManager;
 
@@ -23,6 +24,19 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
     private static final String MINT_API_KEY = "76da1102";
 
     private static final int REQUEST_CAMERA_PERMISSION = 1;
+
+    public enum Mode {
+        NULL,
+        CALIBRATION,
+        CONTROL
+    }
+    Mode mMode = Mode.NULL;
+    private static final String TAG_CALIBRATION_FRAGMENT = "CalibrationFragment";
+    CalibrationFragment mCalibrationFragment;
+
+
+
+
 
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
@@ -59,10 +73,8 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
 
     @Override
     protected void onPause() {
-        if(!isChangingConfigurations()) {
-            Camera camera = Camera.getInstance();
-            camera.closeCamera();
-        }
+        Camera camera = Camera.getInstance();
+        camera.closeCamera();
         super.onPause();
     }
 
@@ -90,7 +102,11 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
 
             ControlFragment controlFragment = ControlFragment.newInstance();
             getFragmentManager().beginTransaction().replace(R.id.task_fragment, controlFragment).commit();
+
+            mMode = Mode.CONTROL;
         }
+
+
 
         // hide action bar
         ActionBar actionBar = getSupportActionBar();
@@ -120,18 +136,26 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
                 CalibrationFragment calibrationFragment = new CalibrationFragment();
                 ft.replace(R.id.task_fragment, calibrationFragment);
                 ft.commit();
+                mMode = Mode.CALIBRATION;
                 return true;
             case R.id.control:
                 FragmentManager fm2 = getFragmentManager();
                 FragmentTransaction ft2 = fm2.beginTransaction();
                 ControlFragment controlFragment = ControlFragment.newInstance();
-                ft2.replace(R.id.task_fragment, controlFragment);
+                ft2.replace(R.id.task_fragment, controlFragment, TAG_CALIBRATION_FRAGMENT);
                 ft2.commit();
+                mMode = Mode.CONTROL;
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
         }
     }
+
+
+
+
+
+
 
 
 }

@@ -3,6 +3,7 @@
     <string name="camera_fragment">Camera Fragment</string>
     <string name="img_desc">Background Image</string>
     <string name="capture">Capture</string>
+    <string name="calibrate_again">Calibrate Again</string>
     <string name="calibration">Calibration</string>
     <string name="control">Control</string>
     <string name="on">On</string>
