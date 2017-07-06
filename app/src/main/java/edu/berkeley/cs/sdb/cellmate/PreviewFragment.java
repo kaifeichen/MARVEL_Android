@@ -194,10 +194,10 @@ public class PreviewFragment extends Fragment {
         if (activity != null) {
             activity.runOnUiThread(() -> {
                 if (x != -1) {
-                    double right = 480 - y + size;
-                    double left = 480 - y - size;
-                    double bottom = x + size;
-                    double top = Math.max(0, x - size);
+                    double right = x + size;
+                    double left = x - size;
+                    double bottom = y + size;
+                    double top = y - size;
                     Rect rect = new Rect((int) left, (int) top, (int) (right), (int) (bottom));
 
                     Paint paint = new Paint();

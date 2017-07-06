@@ -208,17 +208,17 @@ public class ControlFragment extends Fragment {
                 image.close();
                 Runnable senderRunnable = new Runnable() {
                     ByteString mData;
-                    int mRotateLeftAngle;
+                    int mRotateClockwiseAngle;
                     @Override
                     public void run() {
-                        sendRequestToServer(mData,mRotateLeftAngle);
+                        sendRequestToServer(mData,mRotateClockwiseAngle);
                     }
 
                     public Runnable init(ByteString data) {
                         mData = data;
                         Camera camera = Camera.getInstance();
                         //Angles the data image need to rotate right to have the correct direction
-                        mRotateLeftAngle = (270 - camera.getDeviceOrientation()) % 360;
+                        mRotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
                         return(this);
                     }
                 }.init(data);
@@ -262,7 +262,7 @@ public class ControlFragment extends Fragment {
         return new ControlFragment();
     }
 
-    private void sendRequestToServer(ByteString data, int rotateLeftAngle) {
+    private void sendRequestToServer(ByteString data, int rotateClockwiseAngle) {
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
         double Fx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
@@ -285,7 +285,7 @@ public class ControlFragment extends Fragment {
                     .setFy(mFy)
                     .setCx(mCx)
                     .setCy(mCy)
-                    .setAngle(rotateLeftAngle)
+                    .setAngle(rotateClockwiseAngle)
                     .build();
             mRequestObserver.onNext(request);
         } catch (RuntimeException e) {
