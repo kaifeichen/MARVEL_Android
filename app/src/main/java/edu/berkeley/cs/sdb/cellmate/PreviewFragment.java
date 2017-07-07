@@ -5,7 +5,11 @@ import android.app.Fragment;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Matrix;
+import android.graphics.Paint;
+import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
 import android.os.Bundle;
@@ -17,6 +21,7 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 
 public class PreviewFragment extends Fragment {
@@ -26,15 +31,21 @@ public class PreviewFragment extends Fragment {
     private AutoFitTextureView mTextureView;
     // The android.util.Size of camera preview.
     private Size mPreviewSize;
+    Surface mTextureViewSurface;
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
+
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
             Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
 
-            Surface surface = new Surface(surfaceTexture);
+            mTextureViewSurface = new Surface(surfaceTexture);
 
-            configureTransform(width, height);
-            mStateCallback.onSurfaceAvailable(surface);
+//            configureTransform(width, height);
+            Camera camera = Camera.getInstance();
+            Log.i("CellMate","preview fragment register++++");
+            camera.registerPreviewSurface(mTextureViewSurface);
+            updateSensorOrientation(camera.getmSensorOrientation());
+            configureTransform(mTextureView.getWidth(), mTextureView.getHeight());
         }
 
         @Override
@@ -44,6 +55,7 @@ public class PreviewFragment extends Fragment {
 
         @Override
         public boolean onSurfaceTextureDestroyed(SurfaceTexture surfaceTexture) {
+            mTextureViewSurface = null;
             surfaceTexture.release();
             return true;
         }
@@ -63,6 +75,8 @@ public class PreviewFragment extends Fragment {
 
         return previewFragment;
     }
+
+
 
     @Override
     public void onAttach(Context context) {
@@ -86,8 +100,30 @@ public class PreviewFragment extends Fragment {
         mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
 
         mHighLight = (ImageView) view.findViewById(R.id.imageView);
+
+
     }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+
+        Camera camera = Camera.getInstance();
+        if(mTextureViewSurface != null) {
+            Log.i("CellMate","preview fragment register++++");
+            camera.registerPreviewSurface(mTextureViewSurface);
+        }
+
+    }
+
+
+    @Override
+    public void onPause() {
+        Camera camera = Camera.getInstance();
+        Log.i("CellMate","preview fragment unregister-----");
+        camera.unregisterPreviewSurface(mTextureViewSurface);
+        super.onPause();
+    }
 
     /**
      * Update UI based on a sensor orientation
@@ -164,7 +200,39 @@ public class PreviewFragment extends Fragment {
         mTextureView.setTransform(matrix);
     }
 
+    public void drawHighlight(String name, double x, double y, double size) {
+        final Activity activity = getActivity();
+        if (activity != null) {
+            activity.runOnUiThread(() -> {
+                if (x != -1) {
+                    double right = 480 - y + size;
+                    double left = 480 - y - size;
+                    double bottom = x + size;
+                    double top = Math.max(0, x - size);
+                    Rect rect = new Rect((int) left, (int) top, (int) (right), (int) (bottom));
+
+                    Paint paint = new Paint();
+                    paint.setColor(Color.BLUE);
+                    paint.setStyle(Paint.Style.STROKE);
+                    if (mBmp != null && !mBmp.isRecycled()) {
+                        mBmp.recycle();
+                    }
+                    Bitmap mBmp = Bitmap.createBitmap(480, 640, Bitmap.Config.ARGB_8888);
+                    Canvas canvas = new Canvas(mBmp);
+                    canvas.drawRect(rect, paint);
+                    mHighLight.setImageBitmap(mBmp);
+                } else {
+                    if (mBmp != null && !mBmp.isRecycled()) {
+                        mBmp.recycle();
+                    }
+                    Bitmap mBmp = Bitmap.createBitmap(480, 640, Bitmap.Config.ARGB_8888);
+                    mHighLight.setImageBitmap(mBmp);
+                }
+            });
+        }
+    }
+
     public interface StateCallback {
-        void onSurfaceAvailable(Surface surface);
+
     }
 }
