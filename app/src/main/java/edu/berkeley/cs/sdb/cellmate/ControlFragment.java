@@ -178,6 +178,13 @@ public class ControlFragment extends Fragment {
                     } catch (IllegalStateException e) {
                         //Do nothing
                         //To fix "Fragment ControlFragment{2dab555} not attached to Activity"
+                    } catch (NullPointerException e) {
+                        //Do nothing
+                        //To fix  "Attempt to invoke interface method
+                        //'void edu.berkeley.cs.sdb.cellmate.ControlFragment$
+                        //StateCallback.onObjectIdentified(java.lang.String, double, double, double)'
+                        //on a null object reference"
+                        //I think this problem is due to
                     }
                 });
 
@@ -344,28 +351,6 @@ public class ControlFragment extends Fragment {
         return mView;
     }
 
-//    private void goToLandScape() {
-//        DisplayMetrics displayMetrics = new DisplayMetrics();
-//        getActivity().getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-//        int height = displayMetrics.heightPixels;
-//        int width = displayMetrics.widthPixels;
-//        mView.setPivotX(width);
-//        mView.setPivotY(height);
-//        mView.setRotation(90);
-//        mView.setTranslationX(-1*width);
-//    }
-//
-//    private void backToPortrait() {
-//        DisplayMetrics displayMetrics = new DisplayMetrics();
-//        getActivity().getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-//        int height = displayMetrics.heightPixels;
-//        int width = displayMetrics.widthPixels;
-//        mView.setPivotX(width);
-//        mView.setPivotY(height);
-//        mView.setTranslationX(width);
-//        mView.setRotation(-90);
-//
-//    }
 
 
 

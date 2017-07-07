@@ -3,7 +3,6 @@ package edu.berkeley.cs.sdb.cellmate;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
-import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -22,12 +21,7 @@ import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
-import android.widget.Toast;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
 
 
 public class PreviewFragment extends Fragment {
@@ -69,7 +63,20 @@ public class PreviewFragment extends Fragment {
         @Override
         public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int width, int height) {
             Log.i(LOG_TAG, "onSurfaceTextureSizeChanged, width=" + width + ",height=" + height);
+            Camera camera = Camera.getInstance();
+
+
+            mPreviewSize = camera.getBestPreviewSize(width,height);
+
+            updateSensorOrientation();
             configureTransform(width, height);
+            surfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+            if(mTextureViewSurface != null) {
+                camera.unregisterPreviewSurface(mTextureViewSurface);
+            }
+            mTextureViewSurface = new Surface(surfaceTexture);
+            Log.i("CellMate","preview fragment register++++");
+            camera.registerPreviewSurface(mTextureViewSurface);
         }
 
         @Override
@@ -221,6 +228,15 @@ public class PreviewFragment extends Fragment {
         }
     }
 
+    public void clearHighlight() {
+        final Activity activity = getActivity();
+        if (activity != null) {
+            activity.runOnUiThread(() -> {
+                Bitmap mBmp = Bitmap.createBitmap(480, 640, Bitmap.Config.ARGB_8888);
+                mHighLight.setImageBitmap(mBmp);
+            });
+        }
+    }
 
 
 

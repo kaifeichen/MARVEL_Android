@@ -1,13 +1,22 @@
 package edu.berkeley.cs.sdb.cellmate;
 
+import android.Manifest;
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.app.DialogFragment;
 import android.app.FragmentManager;
 import android.app.FragmentTransaction;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.util.Size;
 import android.view.Menu;
 import android.view.MenuInflater;
@@ -16,29 +25,50 @@ import android.view.WindowManager;
 
 import com.splunk.mint.Mint;
 
-public class MainActivity extends AppCompatActivity implements PreviewFragment.StateCallback, ControlFragment.StateCallback {
+public class MainActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback, PreviewFragment.StateCallback, ControlFragment.StateCallback {
     private static final String MINT_API_KEY = "76da1102";
 
     private static final int REQUEST_CAMERA_PERMISSION = 1;
 
+    public enum PermissionState {
+        NOT_GRANTED,
+        GRANTED,
+    }
+
+    PermissionState mPermissionState;
+
     public enum Mode {
         NULL,
         CALIBRATION,
-        CONTROL
+        CONTROL,
     }
     Mode mMode = Mode.NULL;
+
+
     private static final String TAG_CALIBRATION_FRAGMENT = "CalibrationFragment";
     CalibrationFragment mCalibrationFragment;
 
+    private static final String FRAGMENT_DIALOG = "dialog";
 
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions,
-                                           @NonNull int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
-            if (grantResults.length != 1 || grantResults[0] != PackageManager.PERMISSION_GRANTED) {
-                throw new NullPointerException("Camera no permission");
+            if (grantResults.length != 1 || grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.i("MainActivity", "Permission granted");
+                createDefaultFragments(mSavedInstanceState);
+                Camera camera = Camera.getInstance();
+                if(!camera.isOpen()) {
+                    camera.openCamera();
+                }
+                mPermissionState = PermissionState.GRANTED;
+            } else {
+                this.finish();
             }
+        } else {
+            super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         }
     }
 
@@ -57,35 +87,74 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
     @Override
     protected void onResume() {
         super.onResume();
-
-        Camera camera = Camera.getInstance();
-        if(!camera.isOpen()) {
-            camera.openCamera();
+        Log.i("MainActivity", "onResume");
+        if (mPermissionState == PermissionState.GRANTED) {
+            Camera camera = Camera.getInstance();
+            if (!camera.isOpen()) {
+                camera.openCamera();
+            }
         }
     }
 
 
     @Override
     protected void onPause() {
-        Camera camera = Camera.getInstance();
-        camera.closeCamera();
+        Log.i("MainActivity", "onPause");
+        if (mPermissionState == PermissionState.GRANTED) {
+            Camera camera = Camera.getInstance();
+            if(camera.isOpen()) {
+                camera.closeCamera();
+            }
+        }
+
         super.onPause();
+    }
+
+    private void requestCameraPermission() {
+            // No explanation needed, we can request the permission.
+        ActivityCompat.requestPermissions(this,
+                new String[]{Manifest.permission.CAMERA},
+                REQUEST_CAMERA_PERMISSION);
     }
 
 
 
+    Bundle mSavedInstanceState;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Log.i("MainActivity", "onCreate");
         super.onCreate(savedInstanceState);
 
-
-
+        mSavedInstanceState = savedInstanceState;
         Mint.initAndStartSession(this, MINT_API_KEY);
+
+        // hide action bar
+        ActionBar actionBar = getSupportActionBar();
+        actionBar.setDisplayShowHomeEnabled(false);
+        actionBar.setDisplayShowTitleEnabled(false);
+
 
         setContentView(R.layout.main_activity);
 
+
         this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
+
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            Log.i("MainActivity", "onCreate askPermission");
+            mPermissionState = PermissionState.NOT_GRANTED;
+            requestCameraPermission();
+        } else {
+            Log.i("MainActivity", "onCreate not askPermission");
+            mPermissionState = PermissionState.GRANTED;
+            createDefaultFragments(savedInstanceState);
+        }
+    }
+
+    public void createDefaultFragments(Bundle savedInstanceState){
+        Log.i("MainActivity", "createDefaultFragments");
         if (savedInstanceState == null) {
             Size size = new Size(640, 480);
             Camera.getInstance(this,size);
@@ -99,19 +168,7 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
 
             mMode = Mode.CONTROL;
         }
-
-
-
-        // hide action bar
-        ActionBar actionBar = getSupportActionBar();
-        actionBar.setDisplayShowHomeEnabled(false);
-        actionBar.setDisplayShowTitleEnabled(false);
-
-
-
-
     }
-
 
 
     @Override
@@ -129,6 +186,10 @@ public class MainActivity extends AppCompatActivity implements PreviewFragment.S
                 startActivity(intent);
                 return true;
             case R.id.calibration:
+                PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
+                if(previewFragment != null) {
+                    previewFragment.clearHighlight();
+                }
                 FragmentManager fm = getFragmentManager();
                 FragmentTransaction ft = fm.beginTransaction();
                 CalibrationFragment calibrationFragment = new CalibrationFragment();

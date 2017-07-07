@@ -2,8 +2,12 @@ package edu.berkeley.cs.sdb.cellmate;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.Dialog;
+import android.app.DialogFragment;
 import android.app.Fragment;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.graphics.ImageFormat;
@@ -23,7 +27,6 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
-import android.support.v13.app.FragmentCompat;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
@@ -44,6 +47,7 @@ import java.util.concurrent.TimeUnit;
 
 
 public class Camera {
+    private static final String FRAGMENT_DIALOG = "dialog";
 
     private OrientationEventListener mOrientationEventListener;
     private int mDeviceOrientation;
@@ -75,6 +79,16 @@ public class Camera {
      * Max preview height that is guaranteed by Camera2 API
      */
     private static final int MAX_PREVIEW_HEIGHT = 1080;
+
+    /**
+     * Max preview width that is guaranteed by Camera2 API
+     */
+    private static final int MAX_PREVIEW_WIDTH2 = 960;
+
+    /**
+     * Max preview height that is guaranteed by Camera2 API
+     */
+    private static final int MAX_PREVIEW_HEIGHT2 = 720;
 
     private static final int REQUEST_CAMERA_PERMISSION = 1;
     private static final String LOG_TAG = "CellMate";
@@ -155,6 +169,8 @@ public class Camera {
             if(!mSurfaces.isEmpty()) {
                 Log.i("Cellmate","Update from onOpen");
                 updatePreviewSession();
+            } else {
+                Log.i("Cellmate","Empty surfaces in Update from onOpen");
             }
 
         }
@@ -227,6 +243,9 @@ public class Camera {
      * @param surface
      */
     public void registerCaptureSurface(Surface surface) {
+        if(mBackgroundThread == null) {
+            startBackgroundThread();
+        }
         mBackgroundHandler.post(()-> {
             if (!surface.isValid() || mCaptureSurfaces.contains(surface)) {
                 return;
@@ -242,6 +261,9 @@ public class Camera {
      * @param surface
      */
     public void unregisterCaptureSurface(Surface surface) {
+        if(mBackgroundThread == null) {
+            startBackgroundThread();
+        }
         mBackgroundHandler.post(()-> {
             mCaptureSurfaces.remove(surface);
             updatePreviewSession();
@@ -255,6 +277,9 @@ public class Camera {
      * @param surface
      */
     public void registerPreviewSurface(Surface surface) {
+        if(mBackgroundThread == null) {
+            startBackgroundThread();
+        }
         mBackgroundHandler.post(()-> {
             if (!surface.isValid() || mSurfaces.contains(surface)) {
                 return;
@@ -270,24 +295,21 @@ public class Camera {
      * @param surface
      */
     public void unregisterPreviewSurface(Surface surface) {
+        if(mBackgroundThread == null) {
+            startBackgroundThread();
+        }
         mBackgroundHandler.post(()-> {
             mSurfaces.remove(surface);
             updatePreviewSession();
         });
     }
 
-    private void requestCameraPermission() {
-        ActivityCompat.requestPermissions((Activity)mContext, new String[] {Manifest.permission.CAMERA}, REQUEST_CAMERA_PERMISSION);
-
-    }
 
     public void openCamera() {
-        startBackgroundThread();
-
-        if (ContextCompat.checkSelfPermission(mContext, Manifest.permission.CAMERA)
-                != PackageManager.PERMISSION_GRANTED) {
-            requestCameraPermission();
+        if(mBackgroundThread == null) {
+            startBackgroundThread();
         }
+
 
         Log.i("Camera Device", "openCamera");
         try {
@@ -331,7 +353,7 @@ public class Camera {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        if (mCameraState!=States.OPENED) throw new AssertionError("Camera State wrong");
+//        if (mCameraState!=States.OPENED) throw new AssertionError("Camera State wrong");
         mCameraState = States.IDLE;
         mCameraStateLock.release();
 
@@ -420,7 +442,7 @@ public class Camera {
 
     private void updatePreviewSession() {
         Log.i("Cellmate","Get into update");
-        //Avoid race condition because surfaces canbe changed from different threads
+        //Avoid race condition because surfaces can be changed from different threads
 
         if(mCameraState == States.OPENED) {
             List<Surface> newSurfaces = new LinkedList<>();
@@ -450,6 +472,7 @@ public class Camera {
                     // Here, we create a CameraCaptureSession for camera preview. It closes the previous session and its requests
                     mCameraDevice.createCaptureSession(allSurfaces, mSessionStateCallback, null);
                 } catch (CameraAccessException e) {
+                    e.printStackTrace();
                     throw new RuntimeException(e);
                 }
             }
@@ -624,6 +647,9 @@ public class Camera {
     public void takePictureWithSurfaceRegisteredBefore(Surface surface) {
         System.out.println("in takePictureWithSurfaceRegisteredBefore");
         System.out.println("mSurfaces size is " + mSurfaces.size());
+        if(mBackgroundThread == null) {
+            startBackgroundThread();
+        }
         mBackgroundHandler.post(()-> {
             mCaptureSurface = surface;
             lockFocus();
@@ -711,4 +737,6 @@ public class Camera {
     public int getDeviceOrientation() {
         return mDeviceOrientation;
     }
+
+
 }
