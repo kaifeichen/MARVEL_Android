@@ -4,4 +4,10 @@
     <item
         android:id="@+id/settings"
         android:title="@string/settings"/>
+    <item
+        android:id="@+id/calibration"
+        android:title="@string/calibration"/>
+    <item
+        android:id="@+id/control"
+        android:title="@string/control"/>
 </menu>

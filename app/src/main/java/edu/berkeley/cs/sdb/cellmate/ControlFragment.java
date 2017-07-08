@@ -5,6 +5,7 @@ import android.app.Fragment;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
@@ -25,6 +26,7 @@ import android.support.v13.app.FragmentCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Base64;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Size;
 import android.view.LayoutInflater;
@@ -79,6 +81,7 @@ public class ControlFragment extends Fragment {
     private Button mOnButton;
     private Button mOffButton;
 
+
     private Long mLastTime;
     // We keep a toast reference so it can be updated instantly
     private Toast mToast;
@@ -103,11 +106,13 @@ public class ControlFragment extends Fragment {
     };
     private final SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = (SharedPreferences sharedPreferences, String key) -> {
         // when BOSSWAVE router changes, we need to reconnect
-        if (key.equals(getString(R.string.bosswave_router_addr_key)) || key.equals(getString(R.string.bosswave_router_port_key)) || key.equals(getString(R.string.bosswave_key_base64_key))) {
-            if (mIsBosswaveConnected) {
-                new BwCloseTask(mBosswaveClient, mBwCloseTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-            } else {
-                initBosswaveClient();
+        if(getActivity() != null) {
+            if (key.equals(getString(R.string.bosswave_router_addr_key)) || key.equals(getString(R.string.bosswave_router_port_key)) || key.equals(getString(R.string.bosswave_key_base64_key))) {
+                if (mIsBosswaveConnected) {
+                    new BwCloseTask(mBosswaveClient, mBwCloseTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                } else {
+                    initBosswaveClient();
+                }
             }
         }
     };
@@ -311,11 +316,53 @@ public class ControlFragment extends Fragment {
         }
     }
 
+
+    @Override
+    public void setUserVisibleHint(boolean isVisibleToUser) {
+        super.setUserVisibleHint(isVisibleToUser);
+        if(isVisibleToUser) {
+            Activity a = getActivity();
+            if(a != null) a.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR);
+        }
+    }
+
+    private View mView;
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        return inflater.inflate(R.layout.control_fragment, container, false);
+        mView = inflater.inflate(R.layout.control_fragment, container, false);
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+        getActivity().getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+        int height = displayMetrics.heightPixels;
+        int width = displayMetrics.widthPixels;
+        mView.setY(-1*50);
+        return mView;
     }
+
+//    private void goToLandScape() {
+//        DisplayMetrics displayMetrics = new DisplayMetrics();
+//        getActivity().getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+//        int height = displayMetrics.heightPixels;
+//        int width = displayMetrics.widthPixels;
+//        mView.setPivotX(width);
+//        mView.setPivotY(height);
+//        mView.setRotation(90);
+//        mView.setTranslationX(-1*width);
+//    }
+//
+//    private void backToPortrait() {
+//        DisplayMetrics displayMetrics = new DisplayMetrics();
+//        getActivity().getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+//        int height = displayMetrics.heightPixels;
+//        int width = displayMetrics.widthPixels;
+//        mView.setPivotX(width);
+//        mView.setPivotY(height);
+//        mView.setTranslationX(width);
+//        mView.setRotation(-90);
+//
+//    }
+
+
 
     ImageReader mImageReader;
     @Override
@@ -325,7 +372,6 @@ public class ControlFragment extends Fragment {
         mOnButton.setOnClickListener(mOnButtonOnClickListener);
         mOffButton = (Button) view.findViewById(R.id.off);
         mOffButton.setOnClickListener(mOffButtonOnClickListener);
-
 
         setButtonsEnabled(false, false);
         setHasOptionsMenu(true);
@@ -443,8 +489,6 @@ public class ControlFragment extends Fragment {
             });
         }
     }
-
-
 
 
 

@@ -3,10 +3,15 @@
     <string name="camera_fragment">Camera Fragment</string>
     <string name="img_desc">Background Image</string>
     <string name="capture">Capture</string>
+    <string name="calibrate_again">Calibrate Again</string>
+    <string name="calibration">Calibration</string>
+    <string name="control">Control</string>
     <string name="on">On</string>
     <string name="off">Off</string>
     <string name="none">None</string>
     <string name="settings">Settings</string>
+    <string name="progressBar">ProgressBar</string>
+    <string name="zeroProgress">N/A</string>
     <string name="request_permission">This sample needs camera permission.</string>
 
     <string name="grpc_server_addr_key">grpc_server_addr</string>
@@ -14,7 +19,16 @@
     <string name="grpc_server_addr_val">castle.cs.berkeley.edu</string>
     <string name="grpc_server_port_key">grpc_server_port</string>
     <string name="grpc_server_port_title">GRPC Server Port</string>
-    <string name="grpc_server_port_val">50001</string>
+    <string name="grpc_server_port_val">50011</string>
+
+    <string name="calibration_server_addr_key">calibration_server_addr</string>
+    <string name="calibration_server_addr_title">Calibration Server Address</string>
+    <string name="calibration_server_addr_val">castle.cs.berkeley.edu</string>
+    <string name="calibration_server_port_key">calibration_server_port</string>
+    <string name="calibration_server_port_title">Calibration Server Port</string>
+    <string name="calibration_server_port_val">50012</string>
+
+
     <string name="bosswave_router_addr_key">bosswave_router_addr</string>
     <string name="bosswave_router_addr_title">BOSSWAVE Router Address</string>
     <string name="bosswave_router_addr_val">castle.cs.berkeley.edu</string>
