@@ -10,6 +10,7 @@ import android.app.FragmentTransaction;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Point;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -18,21 +19,23 @@ import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.util.Size;
+import android.view.Display;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
+import android.view.View;
 import android.view.WindowManager;
 
 import com.splunk.mint.Mint;
 
-public class MainActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback, PreviewFragment.StateCallback, ControlFragment.StateCallback {
+public class MainActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback,  ControlFragment.StateCallback {
     private static final String MINT_API_KEY = "76da1102";
 
     private static final int REQUEST_CAMERA_PERMISSION = 1;
 
     public enum PermissionState {
         NOT_GRANTED,
-        GRANTED,
+        GRANTED
     }
 
     PermissionState mPermissionState;
@@ -41,9 +44,11 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         NULL,
         CALIBRATION,
         CONTROL,
+        PREVIEW
     }
     Mode mMode = Mode.NULL;
 
+    Size mSystemSize;
 
     private static final String TAG_CALIBRATION_FRAGMENT = "CalibrationFragment";
     CalibrationFragment mCalibrationFragment;
@@ -73,13 +78,17 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
 
     @Override
-    public void onObjectIdentified(String name, double x, double y, double size) {
+    public void onObjectIdentified(String name, double x, double y, double size, double width, double height) {
         PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
         if(previewFragment != null) {
-            previewFragment.drawHighlight(name, x, y, size);
+            previewFragment.drawHighlight(name, x, y, size, width, height);
         }
 
     }
+
+
+
+
 
 
 
@@ -138,7 +147,9 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         setContentView(R.layout.main_activity);
 
 
-        this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+
+//        this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
 
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
@@ -156,17 +167,21 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     public void createDefaultFragments(Bundle savedInstanceState){
         Log.i("MainActivity", "createDefaultFragments");
         if (savedInstanceState == null) {
-            Size size = new Size(640, 480);
-            Camera.getInstance(this,size);
+            Camera.getInstance(this);
 
 
             PreviewFragment previewFragment = PreviewFragment.newInstance();
             getFragmentManager().beginTransaction().replace(R.id.preview_fragment, previewFragment).commit();
 
+            Log.i("MainActivity", "after createDefaultFragments");
+            mMode = Mode.PREVIEW;
+
             ControlFragment controlFragment = ControlFragment.newInstance();
             getFragmentManager().beginTransaction().replace(R.id.task_fragment, controlFragment).commit();
 
             mMode = Mode.CONTROL;
+
+
         }
     }
 
@@ -193,6 +208,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 FragmentManager fm = getFragmentManager();
                 FragmentTransaction ft = fm.beginTransaction();
                 CalibrationFragment calibrationFragment = new CalibrationFragment();
+                calibrationFragment.setSize(mSystemSize);
                 ft.replace(R.id.task_fragment, calibrationFragment);
                 ft.commit();
                 mMode = Mode.CALIBRATION;
@@ -201,12 +217,27 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 FragmentManager fm2 = getFragmentManager();
                 FragmentTransaction ft2 = fm2.beginTransaction();
                 ControlFragment controlFragment = ControlFragment.newInstance();
+                controlFragment.setSize(mSystemSize);
                 ft2.replace(R.id.task_fragment, controlFragment, TAG_CALIBRATION_FRAGMENT);
                 ft2.commit();
                 mMode = Mode.CONTROL;
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
         }
     }
 }

@@ -64,7 +64,7 @@ public class Camera {
 
     private static Camera mInstance;
     private static Context mContext;
-    private final Size mSize;
+
     private int mSensorOrientation;
 
     Surface mCaptureSurface;
@@ -195,7 +195,7 @@ public class Camera {
 
     };
 
-    private Camera(Context context, Size size) {
+    private Camera(Context context) {
         try {
             mCameraStateLock.acquire();
         } catch (InterruptedException e) {
@@ -205,7 +205,6 @@ public class Camera {
         mCameraState = States.IDLE;
         mCameraStateLock.release();
         mContext = context;
-        mSize = size;
         mSurfaces = new LinkedList<>();
         mCaptureSurfaces = new LinkedList<>();
         mOrientationEventListener = new OrientationEventListener(mContext)
@@ -219,9 +218,10 @@ public class Camera {
         mOrientationEventListener.enable();
     }
 
-    public static synchronized Camera getInstance(Context context, Size size) {
+    public static synchronized Camera getInstance(Context context) {
         if (mInstance == null) {
-            mInstance = new Camera(context, size);
+            mInstance = new Camera(context);
+            setPreviewAndCaptureSize();
         }
         return mInstance;
     }
@@ -398,10 +398,10 @@ public class Camera {
                     continue;
                 }
 
-                List<Size> imageSizes = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG));
-                if (!imageSizes.contains(mSize)) {
-                    continue;
-                }
+//                List<Size> imageSizes = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG));
+//                if (!imageSizes.contains(mSize)) {
+//                    continue;
+//                }
 
                 mSensorOrientation = Characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
 
@@ -482,8 +482,95 @@ public class Camera {
 
     }
 
-    public Size getCameraSize(){
-        return mSize;
+    private static Size mCaptureSize;
+    private static Size mPreviewSize;
+    private static Size mScreenSize;
+
+    private static void setPreviewAndCaptureSize() {
+        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
+        try {
+            for (String cameraId : manager.getCameraIdList()) {
+                CameraCharacteristics characteristics
+                        = manager.getCameraCharacteristics(cameraId);
+
+                // We don't use a front facing camera in this sample.
+                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
+                    continue;
+                }
+
+                StreamConfigurationMap map = characteristics.get(
+                        CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                if (map == null) {
+                    continue;
+                }
+
+
+                if (map == null) {
+                    continue;
+                }
+
+                Point displaySize = new Point();
+                ((WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealSize(displaySize);
+
+                mScreenSize = new Size(displaySize.x,displaySize.y);
+                //For capture, choose the smallest size but above 480 resolution
+                for(Size option : map.getOutputSizes(ImageFormat.JPEG)) {
+                    if(option.getWidth()*displaySize.x == option.getHeight()*displaySize.y
+                            && Math.min(option.getWidth(), option.getHeight()) >= 480) {
+                        if(mCaptureSize == null) {
+                            mCaptureSize = option;
+                        } else {
+                            if(mCaptureSize.getHeight() * mCaptureSize.getWidth() > option.getHeight() * option.getWidth()) {
+                                mCaptureSize = option;
+                            }
+                        }
+                    }
+                }
+                System.out.println("mCaptureSize");
+                System.out.println(mCaptureSize);
+
+
+
+                //For preview, choose the largest size but under MAX_PREVIEW_SIZE
+                for(Size option : map.getOutputSizes(SurfaceTexture.class)) {
+                    System.out.println(option);
+                    if(option.getWidth()*displaySize.x == option.getHeight()*displaySize.y
+                            && Math.min(option.getWidth(), option.getHeight()) <= MAX_PREVIEW_HEIGHT) {
+
+                        if(mPreviewSize == null) {
+                            mPreviewSize = option;
+                        } else {
+                            if(mPreviewSize.getHeight() * mPreviewSize.getWidth() < option.getHeight() * option.getWidth()) {
+                                mPreviewSize = option;
+                            }
+                        }
+
+                    }
+                }
+                System.out.println("mpreviewSize");
+                System.out.println(mPreviewSize);
+            }
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        } catch (NullPointerException e) {
+            // Currently an NPE is thrown when the Camera2API is used but not supported on the
+            // device this code runs.
+            e.printStackTrace();
+        }
+
+    }
+
+    public Size getScreenSize(){
+        return mScreenSize;
+    }
+
+    public Size getCaptureSize() {
+        return mCaptureSize;
+    }
+
+    public Size getPreviewSize() {
+        return mPreviewSize;
     }
 
 
@@ -506,6 +593,12 @@ public class Camera {
                 if (map == null) {
                     continue;
                 }
+
+
+
+
+
+
 
                 // For still image captures, we use the largest available size.
                 Size largest = Collections.max(
@@ -564,7 +657,9 @@ public class Camera {
                 resultPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
                         rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth,
                         maxPreviewHeight, largest);
-
+                for (Size option : map.getOutputSizes(ImageFormat.JPEG)) {
+                    System.out.println(option);
+                }
 
                 return resultPreviewSize;
             }
@@ -618,6 +713,7 @@ public class Camera {
         int w = aspectRatio.getWidth();
         int h = aspectRatio.getHeight();
         for (Size option : choices) {
+            System.out.println(option);
             if (option.getWidth() <= maxWidth && option.getHeight() <= maxHeight &&
                     option.getHeight() == option.getWidth() * h / w) {
                 if (option.getWidth() >= textureViewWidth &&
@@ -628,6 +724,8 @@ public class Camera {
                 }
             }
         }
+
+
 
         // Pick the smallest of those big enough. If there is no one big enough, pick the
         // largest of those not big enough.

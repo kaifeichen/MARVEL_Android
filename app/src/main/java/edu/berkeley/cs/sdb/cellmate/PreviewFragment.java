@@ -9,6 +9,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
+import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
@@ -20,6 +21,7 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.ImageView;
 
 
@@ -33,6 +35,7 @@ public class PreviewFragment extends Fragment {
     // The android.util.Size of camera preview.
     private Size mPreviewSize;
     Surface mTextureViewSurface;
+    private Size mSurfaceTextureSize;
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
 
         @Override
@@ -41,12 +44,14 @@ public class PreviewFragment extends Fragment {
 
 
 
+            mSurfaceTextureSize = new Size(width, height);
 
             Camera camera = Camera.getInstance();
 
 
-            mPreviewSize = camera.getBestPreviewSize(width,height);
-
+//            mPreviewSize = camera.getBestPreviewSize(width,height);
+            mPreviewSize = camera.getPreviewSize();
+            Log.i(LOG_TAG, "mPreviewSize, width=" + mPreviewSize.getWidth() + ",height=" + mPreviewSize.getHeight());
             updateSensorOrientation();
             configureTransform(width, height);
 
@@ -67,7 +72,7 @@ public class PreviewFragment extends Fragment {
 
 
             mPreviewSize = camera.getBestPreviewSize(width,height);
-
+            Log.i(LOG_TAG, "mPreviewSize, width=" + mPreviewSize.getWidth() + ",height=" + mPreviewSize.getHeight());
             updateSensorOrientation();
             configureTransform(width, height);
             surfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
@@ -99,16 +104,6 @@ public class PreviewFragment extends Fragment {
     }
 
 
-
-    @Override
-    public void onAttach(Context context) {
-        super.onAttach(context);
-        try {
-            mStateCallback = (StateCallback) context;
-        } catch (ClassCastException e) {
-            throw new RuntimeException(e);
-        }
-    }
 
 
 
@@ -196,16 +191,38 @@ public class PreviewFragment extends Fragment {
         mTextureView.setTransform(matrix);
     }
 
-    public void drawHighlight(String name, double x, double y, double size) {
+
+
+    public void drawHighlight(String name, double x, double y, double size, double width, double height) {
         final Activity activity = getActivity();
         if (activity != null) {
             activity.runOnUiThread(() -> {
                 if (x != -1) {
-                    double right = x + size;
-                    double left = x - size;
-                    double bottom = y + size;
-                    double top = y - size;
-                    Rect rect = new Rect((int) left, (int) top, (int) (right), (int) (bottom));
+
+
+
+                    double ratio = height/mSurfaceTextureSize.getHeight();
+                    double newWidth = width/ratio;
+                    double newHeight = height/ratio;
+                    double newX = x/ratio;
+                    double newY = y/ratio;
+                    double newSize = size/ratio;
+                    double margin = (newWidth - mSurfaceTextureSize.getWidth())/2;
+                    newX = newX - margin;
+
+                    double finalX = newX;
+                    double finalY = newY;
+                    double finalWidth = mSurfaceTextureSize.getWidth();
+                    double finalHeight = mSurfaceTextureSize.getHeight();
+                    double finalSize = newSize;
+
+//                    double finalX = x;
+//                    double finalY = y;
+//                    double finalWidth = width;
+//                    double finalHeight = height;
+//                    double finalSize = size;
+
+
 
                     Paint paint = new Paint();
                     paint.setColor(Color.BLUE);
@@ -213,10 +230,34 @@ public class PreviewFragment extends Fragment {
                     if (mBmp != null && !mBmp.isRecycled()) {
                         mBmp.recycle();
                     }
-                    Bitmap mBmp = Bitmap.createBitmap(480, 640, Bitmap.Config.ARGB_8888);
+
+
+
+                    Bitmap mBmp = Bitmap.createBitmap((int)finalWidth, (int)finalHeight, Bitmap.Config.ARGB_8888);
                     Canvas canvas = new Canvas(mBmp);
+                    double right = finalX + finalSize;
+                    double left = finalX - finalSize;
+                    double bottom = finalY + finalSize;
+                    double top = finalY - finalSize;
+
+                    Rect rect = new Rect((int) (left), (int) (top), (int) (right), (int) (bottom));
+                    Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
+                    Rect rect3 = new Rect((int) 0, (int) finalHeight - 10, (int) (10), (int) (finalHeight));
+                    Rect rect4 = new Rect((int) finalWidth - 10, (int) 0, (int) (finalWidth), (int) (10));
+                    Rect rect5 = new Rect((int) finalWidth - 10, (int) finalHeight - 10, (int) (finalWidth), (int) (finalHeight));
                     canvas.drawRect(rect, paint);
+                    canvas.drawRect(rect2, paint);
+                    canvas.drawRect(rect3, paint);
+                    canvas.drawRect(rect4, paint);
+                    canvas.drawRect(rect5, paint);
                     mHighLight.setImageBitmap(mBmp);
+
+
+                    Point displaySize = new Point();
+                    ((WindowManager) getActivity().getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getSize(displaySize);
+                    ratio = displaySize.x/finalWidth;
+
+                    mHighLight.setTranslationY((float)(-1*(displaySize.y - finalHeight*ratio)/2));
                 } else {
                     if (mBmp != null && !mBmp.isRecycled()) {
                         mBmp.recycle();
