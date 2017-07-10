@@ -178,6 +178,13 @@ public class ControlFragment extends Fragment {
                     } catch (IllegalStateException e) {
                         //Do nothing
                         //To fix "Fragment ControlFragment{2dab555} not attached to Activity"
+                    } catch (NullPointerException e) {
+                        //Do nothing
+                        //To fix  "Attempt to invoke interface method
+                        //'void edu.berkeley.cs.sdb.cellmate.ControlFragment$
+                        //StateCallback.onObjectIdentified(java.lang.String, double, double, double)'
+                        //on a null object reference"
+                        //I think this problem is due to
                     }
                 });
 
@@ -208,13 +215,17 @@ public class ControlFragment extends Fragment {
                 image.close();
                 Runnable senderRunnable = new Runnable() {
                     ByteString mData;
+                    int mRotateClockwiseAngle;
                     @Override
                     public void run() {
-                        sendRequestToServer(mData);
+                        sendRequestToServer(mData,mRotateClockwiseAngle);
                     }
 
                     public Runnable init(ByteString data) {
                         mData = data;
+                        Camera camera = Camera.getInstance();
+                        //Angles the data image need to rotate right to have the correct direction
+                        mRotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
                         return(this);
                     }
                 }.init(data);
@@ -258,7 +269,7 @@ public class ControlFragment extends Fragment {
         return new ControlFragment();
     }
 
-    private void sendRequestToServer(ByteString data) {
+    private void sendRequestToServer(ByteString data, int rotateClockwiseAngle) {
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
         double Fx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
@@ -281,6 +292,7 @@ public class ControlFragment extends Fragment {
                     .setFy(mFy)
                     .setCx(mCx)
                     .setCy(mCy)
+                    .setAngle(rotateClockwiseAngle)
                     .build();
             mRequestObserver.onNext(request);
         } catch (RuntimeException e) {
@@ -339,28 +351,6 @@ public class ControlFragment extends Fragment {
         return mView;
     }
 
-//    private void goToLandScape() {
-//        DisplayMetrics displayMetrics = new DisplayMetrics();
-//        getActivity().getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-//        int height = displayMetrics.heightPixels;
-//        int width = displayMetrics.widthPixels;
-//        mView.setPivotX(width);
-//        mView.setPivotY(height);
-//        mView.setRotation(90);
-//        mView.setTranslationX(-1*width);
-//    }
-//
-//    private void backToPortrait() {
-//        DisplayMetrics displayMetrics = new DisplayMetrics();
-//        getActivity().getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-//        int height = displayMetrics.heightPixels;
-//        int width = displayMetrics.widthPixels;
-//        mView.setPivotX(width);
-//        mView.setPivotY(height);
-//        mView.setTranslationX(width);
-//        mView.setRotation(-90);
-//
-//    }
 
 
 

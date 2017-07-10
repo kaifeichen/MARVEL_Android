@@ -37,7 +37,7 @@ public class CalibrationFragment extends Fragment {
      */
     private ImageReader mImageReader;
     private List<ByteString> mImages;
-    private int mTotal = 3;
+    private int mTotal = 20;
     private Toast mToast;
 
     TextView mProgressText;
