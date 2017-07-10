@@ -30,26 +30,17 @@ public class PreviewFragment extends Fragment {
 
     private static final String LOG_TAG = "CellMate";
     Bitmap mBmp;
-    private StateCallback mStateCallback;
     private AutoFitTextureView mTextureView;
     // The android.util.Size of camera preview.
     private Size mPreviewSize;
     Surface mTextureViewSurface;
-    private Size mSurfaceTextureSize;
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
             Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
 
-
-
-            mSurfaceTextureSize = new Size(width, height);
-
             Camera camera = Camera.getInstance();
-
-
-//            mPreviewSize = camera.getBestPreviewSize(width,height);
             mPreviewSize = camera.getPreviewSize();
             Log.i(LOG_TAG, "mPreviewSize, width=" + mPreviewSize.getWidth() + ",height=" + mPreviewSize.getHeight());
             updateSensorOrientation();
@@ -69,9 +60,7 @@ public class PreviewFragment extends Fragment {
         public void onSurfaceTextureSizeChanged(SurfaceTexture surfaceTexture, int width, int height) {
             Log.i(LOG_TAG, "onSurfaceTextureSizeChanged, width=" + width + ",height=" + height);
             Camera camera = Camera.getInstance();
-
-
-            mPreviewSize = camera.getBestPreviewSize(width,height);
+            mPreviewSize = camera.getPreviewSize();
             Log.i(LOG_TAG, "mPreviewSize, width=" + mPreviewSize.getWidth() + ",height=" + mPreviewSize.getHeight());
             updateSensorOrientation();
             configureTransform(width, height);
@@ -199,65 +188,33 @@ public class PreviewFragment extends Fragment {
             activity.runOnUiThread(() -> {
                 if (x != -1) {
 
-
-
-                    double ratio = height/mSurfaceTextureSize.getHeight();
-                    double newWidth = width/ratio;
-                    double newHeight = height/ratio;
-                    double newX = x/ratio;
-                    double newY = y/ratio;
-                    double newSize = size/ratio;
-                    double margin = (newWidth - mSurfaceTextureSize.getWidth())/2;
-                    newX = newX - margin;
-
-                    double finalX = newX;
-                    double finalY = newY;
-                    double finalWidth = mSurfaceTextureSize.getWidth();
-                    double finalHeight = mSurfaceTextureSize.getHeight();
-                    double finalSize = newSize;
-
-//                    double finalX = x;
-//                    double finalY = y;
-//                    double finalWidth = width;
-//                    double finalHeight = height;
-//                    double finalSize = size;
+                Paint paint = new Paint();
+                paint.setColor(Color.BLUE);
+                paint.setStyle(Paint.Style.STROKE);
+                if (mBmp != null && !mBmp.isRecycled()) {
+                    mBmp.recycle();
+                }
 
 
 
-                    Paint paint = new Paint();
-                    paint.setColor(Color.BLUE);
-                    paint.setStyle(Paint.Style.STROKE);
-                    if (mBmp != null && !mBmp.isRecycled()) {
-                        mBmp.recycle();
-                    }
+                Bitmap mBmp = Bitmap.createBitmap((int)width, (int)height, Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(mBmp);
+                double right = x + size;
+                double left = x  - size;
+                double bottom = y + size;
+                double top = y - size;
 
-
-
-                    Bitmap mBmp = Bitmap.createBitmap((int)finalWidth, (int)finalHeight, Bitmap.Config.ARGB_8888);
-                    Canvas canvas = new Canvas(mBmp);
-                    double right = finalX + finalSize;
-                    double left = finalX - finalSize;
-                    double bottom = finalY + finalSize;
-                    double top = finalY - finalSize;
-
-                    Rect rect = new Rect((int) (left), (int) (top), (int) (right), (int) (bottom));
-                    Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
-                    Rect rect3 = new Rect((int) 0, (int) finalHeight - 10, (int) (10), (int) (finalHeight));
-                    Rect rect4 = new Rect((int) finalWidth - 10, (int) 0, (int) (finalWidth), (int) (10));
-                    Rect rect5 = new Rect((int) finalWidth - 10, (int) finalHeight - 10, (int) (finalWidth), (int) (finalHeight));
-                    canvas.drawRect(rect, paint);
-                    canvas.drawRect(rect2, paint);
-                    canvas.drawRect(rect3, paint);
-                    canvas.drawRect(rect4, paint);
-                    canvas.drawRect(rect5, paint);
-                    mHighLight.setImageBitmap(mBmp);
-
-
-                    Point displaySize = new Point();
-                    ((WindowManager) getActivity().getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getSize(displaySize);
-                    ratio = displaySize.x/finalWidth;
-
-                    mHighLight.setTranslationY((float)(-1*(displaySize.y - finalHeight*ratio)/2));
+                Rect rect = new Rect((int) (left), (int) (top), (int) (right), (int) (bottom));
+                Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
+                Rect rect3 = new Rect((int) 0, (int) height - 10, (int) (10), (int) (height));
+                Rect rect4 = new Rect((int) width - 10, (int) 0, (int) (width), (int) (10));
+                Rect rect5 = new Rect((int) width - 10, (int) height - 10, (int) (width), (int) (height));
+                canvas.drawRect(rect, paint);
+                canvas.drawRect(rect2, paint);
+                canvas.drawRect(rect3, paint);
+                canvas.drawRect(rect4, paint);
+                canvas.drawRect(rect5, paint);
+                mHighLight.setImageBitmap(mBmp);
                 } else {
                     if (mBmp != null && !mBmp.isRecycled()) {
                         mBmp.recycle();
@@ -282,7 +239,5 @@ public class PreviewFragment extends Fragment {
 
 
 
-    public interface StateCallback {
 
-    }
 }

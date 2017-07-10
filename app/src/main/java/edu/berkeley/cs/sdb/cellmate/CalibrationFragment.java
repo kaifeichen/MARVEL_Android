@@ -91,7 +91,9 @@ public class CalibrationFragment extends Fragment {
             }
         });
 
-        mImageReader = ImageReader.newInstance(mCaptureSize.getWidth(), mCaptureSize.getHeight(),
+        Camera camera = Camera.getInstance();
+        Size captureSize = camera.getCaptureSize();
+        mImageReader = ImageReader.newInstance(captureSize.getWidth(),captureSize.getHeight(),
                 ImageFormat.JPEG, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(
                 mOnImageAvailableListener, null);
@@ -216,17 +218,7 @@ public class CalibrationFragment extends Fragment {
         }
     };
 
-    private Size mCaptureSize;
-    public void setSize(Size captureSize) {
-        if(captureSize.getWidth() % 2 == 0 && captureSize.getHeight() % 2 == 0) {
-            mCaptureSize = new Size(captureSize.getWidth()/2, captureSize.getHeight()/2);
-        } else if (captureSize.getWidth() % 3 == 0 && captureSize.getHeight() % 3 == 0) {
-            mCaptureSize = new Size(captureSize.getWidth()/3, captureSize.getHeight()/3);
-        } else {
-            mCaptureSize = new Size(captureSize.getWidth(), captureSize.getHeight());
-        }
 
-    }
 
 
 }

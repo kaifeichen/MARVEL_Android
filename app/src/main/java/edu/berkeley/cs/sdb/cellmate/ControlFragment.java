@@ -265,21 +265,13 @@ public class ControlFragment extends Fragment {
         return max.getKey();
     }
 
-    Size mCaptureSize;
+
 
     public static ControlFragment newInstance() {
         return new ControlFragment();
     }
 
-    public void setSize(Size captureSize) {
-        if(captureSize.getWidth() % 2 == 0 && captureSize.getHeight() % 2 == 0) {
-            mCaptureSize = new Size(captureSize.getWidth()/2, captureSize.getHeight()/2);
-        } else if (captureSize.getWidth() % 3 == 0 && captureSize.getHeight() % 3 == 0) {
-            mCaptureSize = new Size(captureSize.getWidth()/3, captureSize.getHeight()/3);
-        } else {
-            mCaptureSize = new Size(captureSize.getWidth(), captureSize.getHeight());
-        }
-    }
+
 
 
 

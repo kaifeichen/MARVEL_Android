@@ -47,7 +47,6 @@ import java.util.concurrent.TimeUnit;
 
 
 public class Camera {
-    private static final String FRAGMENT_DIALOG = "dialog";
 
     private OrientationEventListener mOrientationEventListener;
     private int mDeviceOrientation;
@@ -65,7 +64,6 @@ public class Camera {
     private static Camera mInstance;
     private static Context mContext;
 
-    private int mSensorOrientation;
 
     Surface mCaptureSurface;
 
@@ -80,17 +78,9 @@ public class Camera {
      */
     private static final int MAX_PREVIEW_HEIGHT = 1080;
 
-    /**
-     * Max preview width that is guaranteed by Camera2 API
-     */
-    private static final int MAX_PREVIEW_WIDTH2 = 960;
 
-    /**
-     * Max preview height that is guaranteed by Camera2 API
-     */
-    private static final int MAX_PREVIEW_HEIGHT2 = 720;
 
-    private static final int REQUEST_CAMERA_PERMISSION = 1;
+
     private static final String LOG_TAG = "CellMate";
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
@@ -397,14 +387,6 @@ public class Camera {
                 if (map == null) {
                     continue;
                 }
-
-//                List<Size> imageSizes = Arrays.asList(map.getOutputSizes(ImageFormat.JPEG));
-//                if (!imageSizes.contains(mSize)) {
-//                    continue;
-//                }
-
-                mSensorOrientation = Characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-
                 return cameraId;
             }
         } catch (CameraAccessException e) {
@@ -513,9 +495,15 @@ public class Camera {
                 Point displaySize = new Point();
                 ((WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealSize(displaySize);
 
+                //Use screen size as a reference of aspect ratio to target capture size and preview size
+                //When capture size and preview size aspect ratio is the same, we know that they get the same image with different resolution
                 mScreenSize = new Size(displaySize.x,displaySize.y);
+                System.out.println("mScreenSize");
+                System.out.println(mScreenSize);
                 //For capture, choose the smallest size but above 480 resolution
+                //Assuming there is at least a size fit the aspect ratio of the screen
                 for(Size option : map.getOutputSizes(ImageFormat.JPEG)) {
+//                    System.out.println(option);
                     if(option.getWidth()*displaySize.x == option.getHeight()*displaySize.y
                             && Math.min(option.getWidth(), option.getHeight()) >= 480) {
                         if(mCaptureSize == null) {
@@ -533,8 +521,9 @@ public class Camera {
 
 
                 //For preview, choose the largest size but under MAX_PREVIEW_SIZE
+                //Assuming there is at least a size fit the aspect ratio of the screen
                 for(Size option : map.getOutputSizes(SurfaceTexture.class)) {
-                    System.out.println(option);
+//                    System.out.println(option);
                     if(option.getWidth()*displaySize.x == option.getHeight()*displaySize.y
                             && Math.min(option.getWidth(), option.getHeight()) <= MAX_PREVIEW_HEIGHT) {
 
@@ -574,170 +563,9 @@ public class Camera {
     }
 
 
-    public Size getBestPreviewSize(int width, int height) {
-        Size resultPreviewSize = null;
-        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
-        try {
-            for (String cameraId : manager.getCameraIdList()) {
-                CameraCharacteristics characteristics
-                        = manager.getCameraCharacteristics(cameraId);
-
-                // We don't use a front facing camera in this sample.
-                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
-                    continue;
-                }
-
-                StreamConfigurationMap map = characteristics.get(
-                        CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-                if (map == null) {
-                    continue;
-                }
 
 
 
-
-
-
-
-                // For still image captures, we use the largest available size.
-                Size largest = Collections.max(
-                        Arrays.asList(map.getOutputSizes(ImageFormat.JPEG)),
-                        new CompareSizesByArea());
-
-                // Find out if we need to swap dimension to get the preview size relative to sensor
-                // coordinate.
-                int displayRotation = ((WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRotation();
-                //noinspection ConstantConditions
-                mSensorOrientation = characteristics.get(CameraCharacteristics.SENSOR_ORIENTATION);
-                boolean swappedDimensions = false;
-                switch (displayRotation) {
-                    case Surface.ROTATION_0:
-                    case Surface.ROTATION_180:
-                        if (mSensorOrientation == 90 || mSensorOrientation == 270) {
-                            swappedDimensions = true;
-                        }
-                        break;
-                    case Surface.ROTATION_90:
-                    case Surface.ROTATION_270:
-                        if (mSensorOrientation == 0 || mSensorOrientation == 180) {
-                            swappedDimensions = true;
-                        }
-                        break;
-                    default:
-                        Log.e("Cellmate", "Display rotation is invalid: " + displayRotation);
-                }
-
-                Point displaySize = new Point();
-                ((WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getSize(displaySize);
-                int rotatedPreviewWidth = width;
-                int rotatedPreviewHeight = height;
-                int maxPreviewWidth = displaySize.x;
-                int maxPreviewHeight = displaySize.y;
-
-                if (swappedDimensions) {
-                    rotatedPreviewWidth = height;
-                    rotatedPreviewHeight = width;
-                    maxPreviewWidth = displaySize.y;
-                    maxPreviewHeight = displaySize.x;
-                }
-
-                if (maxPreviewWidth > MAX_PREVIEW_WIDTH) {
-                    maxPreviewWidth = MAX_PREVIEW_WIDTH;
-                }
-
-                if (maxPreviewHeight > MAX_PREVIEW_HEIGHT) {
-                    maxPreviewHeight = MAX_PREVIEW_HEIGHT;
-                }
-
-                // Danger, W.R.! Attempting to use too large a preview size could  exceed the camera
-                // bus' bandwidth limitation, resulting in gorgeous previews but the storage of
-                // garbage capture data.
-
-                resultPreviewSize = chooseOptimalSize(map.getOutputSizes(SurfaceTexture.class),
-                        rotatedPreviewWidth, rotatedPreviewHeight, maxPreviewWidth,
-                        maxPreviewHeight, largest);
-                for (Size option : map.getOutputSizes(ImageFormat.JPEG)) {
-                    System.out.println(option);
-                }
-
-                return resultPreviewSize;
-            }
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        } catch (NullPointerException e) {
-            // Currently an NPE is thrown when the Camera2API is used but not supported on the
-            // device this code runs.
-            e.printStackTrace();
-        }
-        return resultPreviewSize;
-    }
-
-    /**
-     * Compares two {@code Size}s based on their areas.
-     */
-    static class CompareSizesByArea implements Comparator<Size> {
-
-        @Override
-        public int compare(Size lhs, Size rhs) {
-            // We cast here to ensure the multiplications won't overflow
-            return Long.signum((long) lhs.getWidth() * lhs.getHeight() -
-                    (long) rhs.getWidth() * rhs.getHeight());
-        }
-
-    }
-
-    /**
-     * Given {@code choices} of {@code Size}s supported by a camera, choose the smallest one that
-     * is at least as large as the respective texture view size, and that is at most as large as the
-     * respective max size, and whose aspect ratio matches with the specified value. If such size
-     * doesn't exist, choose the largest one that is at most as large as the respective max size,
-     * and whose aspect ratio matches with the specified value.
-     *
-     * @param choices           The list of sizes that the camera supports for the intended output
-     *                          class
-     * @param textureViewWidth  The width of the texture view relative to sensor coordinate
-     * @param textureViewHeight The height of the texture view relative to sensor coordinate
-     * @param maxWidth          The maximum width that can be chosen
-     * @param maxHeight         The maximum height that can be chosen
-     * @param aspectRatio       The aspect ratio
-     * @return The optimal {@code Size}, or an arbitrary one if none were big enough
-     */
-    private static Size chooseOptimalSize(Size[] choices, int textureViewWidth,
-                                          int textureViewHeight, int maxWidth, int maxHeight, Size aspectRatio) {
-
-        // Collect the supported resolutions that are at least as big as the preview Surface
-        List<Size> bigEnough = new ArrayList<>();
-        // Collect the supported resolutions that are smaller than the preview Surface
-        List<Size> notBigEnough = new ArrayList<>();
-        int w = aspectRatio.getWidth();
-        int h = aspectRatio.getHeight();
-        for (Size option : choices) {
-            System.out.println(option);
-            if (option.getWidth() <= maxWidth && option.getHeight() <= maxHeight &&
-                    option.getHeight() == option.getWidth() * h / w) {
-                if (option.getWidth() >= textureViewWidth &&
-                        option.getHeight() >= textureViewHeight) {
-                    bigEnough.add(option);
-                } else {
-                    notBigEnough.add(option);
-                }
-            }
-        }
-
-
-
-        // Pick the smallest of those big enough. If there is no one big enough, pick the
-        // largest of those not big enough.
-        if (bigEnough.size() > 0) {
-            return Collections.min(bigEnough, new CompareSizesByArea());
-        } else if (notBigEnough.size() > 0) {
-            return Collections.max(notBigEnough, new CompareSizesByArea());
-        } else {
-            Log.e("Cellmate", "Couldn't find any suitable preview size");
-            return choices[0];
-        }
-    }
 
     /**
      * Initiate a still image capture.

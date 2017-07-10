@@ -48,7 +48,6 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
     Mode mMode = Mode.NULL;
 
-    Size mSystemSize;
 
     private static final String TAG_CALIBRATION_FRAGMENT = "CalibrationFragment";
     CalibrationFragment mCalibrationFragment;
@@ -208,7 +207,6 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 FragmentManager fm = getFragmentManager();
                 FragmentTransaction ft = fm.beginTransaction();
                 CalibrationFragment calibrationFragment = new CalibrationFragment();
-                calibrationFragment.setSize(mSystemSize);
                 ft.replace(R.id.task_fragment, calibrationFragment);
                 ft.commit();
                 mMode = Mode.CALIBRATION;
@@ -217,7 +215,6 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 FragmentManager fm2 = getFragmentManager();
                 FragmentTransaction ft2 = fm2.beginTransaction();
                 ControlFragment controlFragment = ControlFragment.newInstance();
-                controlFragment.setSize(mSystemSize);
                 ft2.replace(R.id.task_fragment, controlFragment, TAG_CALIBRATION_FRAGMENT);
                 ft2.commit();
                 mMode = Mode.CONTROL;
@@ -232,9 +229,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                              View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
                             | View.SYSTEM_UI_FLAG_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
