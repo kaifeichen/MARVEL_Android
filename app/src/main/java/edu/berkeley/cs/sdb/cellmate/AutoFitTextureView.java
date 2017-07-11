@@ -2,6 +2,7 @@ package edu.berkeley.cs.sdb.cellmate;
 
 import android.content.Context;
 import android.util.AttributeSet;
+import android.util.Size;
 import android.view.TextureView;
 
 /**
@@ -35,6 +36,8 @@ public class AutoFitTextureView extends TextureView {
      * @param previewHeight vertical size of the preview
      */
     public void setAspectRatio(int previewWidth, int previewHeight) {
+        System.out.println("setAspectRatio width:" + previewWidth + "height: " + previewHeight);
+
         if (previewWidth < 0 || previewHeight < 0) {
             throw new IllegalArgumentException("Size cannot be negative.");
         }
@@ -67,19 +70,24 @@ public class AutoFitTextureView extends TextureView {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-
-        int width = MeasureSpec.getSize(widthMeasureSpec);
-        int height = MeasureSpec.getSize(heightMeasureSpec);
-
-        if (mSurfaceWidth == 0 || mSurfaceHeight == 0) {
-            mSurfaceWidth = width;
-            mSurfaceHeight = height;
-        }
-
-        setMeasuredDimension(mSurfaceWidth, mSurfaceHeight);
-        setTranslationX(mTranslationX);
-        setTranslationY(mTranslationY);
+//        System.out.println("onMeasure width:" + MeasureSpec.getSize(widthMeasureSpec) + "height: " + MeasureSpec.getSize(heightMeasureSpec));
+//        System.out.println("onMeasure Mode width:" + MeasureSpec.getMode(widthMeasureSpec) + "height: " + MeasureSpec.getMode(heightMeasureSpec));
+//        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+//
+//        int width = MeasureSpec.getSize(widthMeasureSpec);
+//        int height = MeasureSpec.getSize(heightMeasureSpec);
+//
+//        if (mSurfaceWidth == 0 || mSurfaceHeight == 0) {
+//            mSurfaceWidth = width;
+//            mSurfaceHeight = height;
+//        }
+//
+//        setMeasuredDimension(mSurfaceWidth, mSurfaceHeight);
+//        setTranslationX(mTranslationX);
+//        setTranslationY(mTranslationY);
+        Camera camera = Camera.getInstance();
+        Size screenSize = camera.getScreenSize();
+        setMeasuredDimension(screenSize.getWidth(), screenSize.getHeight());
     }
 
 }

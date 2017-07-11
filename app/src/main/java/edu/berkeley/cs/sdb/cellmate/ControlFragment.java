@@ -171,7 +171,7 @@ public class ControlFragment extends Fragment {
                             mTextView.setText(getString(R.string.none));
                             setButtonsEnabled(false, false);
                         } else {
-                            mStateCallback.onObjectIdentified(value.getName(), value.getX(), value.getY(), value.getWidth());
+                            mStateCallback.onObjectIdentified(value.getName(), value.getX(), value.getY(),value.getSize() , value.getWidth(), value.getHeight());
                             mTextView.setText(mTargetObject);
                             setButtonsEnabled(true, true);
                         }
@@ -265,9 +265,15 @@ public class ControlFragment extends Fragment {
         return max.getKey();
     }
 
+
+
     public static ControlFragment newInstance() {
         return new ControlFragment();
     }
+
+
+
+
 
     private void sendRequestToServer(ByteString data, int rotateClockwiseAngle) {
         Activity activity = getActivity();
@@ -369,8 +375,8 @@ public class ControlFragment extends Fragment {
         mLastTime = System.currentTimeMillis();
         mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
         Camera camera = Camera.getInstance();
-        Size cameraSize = camera.getCameraSize();
-        mImageReader = ImageReader.newInstance(cameraSize.getWidth(), cameraSize.getHeight(),
+        Size captureSize = camera.getCaptureSize();
+        mImageReader = ImageReader.newInstance(captureSize.getWidth(),captureSize.getHeight(),
                 ImageFormat.JPEG, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(
                 mOnImageAvailableListener, null);
@@ -483,6 +489,6 @@ public class ControlFragment extends Fragment {
 
 
     public interface StateCallback {
-        void onObjectIdentified(String name, double x, double y, double size);
+        void onObjectIdentified(String name, double x, double y, double size, double width, double height);
     }
 }

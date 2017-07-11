@@ -37,7 +37,7 @@ public class CalibrationFragment extends Fragment {
      */
     private ImageReader mImageReader;
     private List<ByteString> mImages;
-    private int mTotal = 20;
+    private int mTotal = 3;
     private Toast mToast;
 
     TextView mProgressText;
@@ -90,10 +90,10 @@ public class CalibrationFragment extends Fragment {
 
             }
         });
-        Camera camera = Camera.getInstance();
-        Size cameraSize = camera.getCameraSize();
 
-        mImageReader = ImageReader.newInstance(cameraSize.getWidth(), cameraSize.getHeight(),
+        Camera camera = Camera.getInstance();
+        Size captureSize = camera.getCaptureSize();
+        mImageReader = ImageReader.newInstance(captureSize.getWidth(),captureSize.getHeight(),
                 ImageFormat.JPEG, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(
                 mOnImageAvailableListener, null);
@@ -217,6 +217,8 @@ public class CalibrationFragment extends Fragment {
             mCaptureButtonContents = getString(R.string.calibrate_again);
         }
     };
+
+
 
 
 }

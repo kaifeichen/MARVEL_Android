@@ -16,14 +16,19 @@
         android:layout_height="match_parent"
         android:layout_alignParentStart="true"
         android:layout_alignParentTop="true"/>
-
     <ImageView
         android:id="@+id/imageView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_toStartOf="@+id/on"
-        app:srcCompat="@android:color/transparent"
-        android:layout_alignParentTop="true"
-        android:layout_alignParentEnd="true" />
+        android:layout_alignParentStart="true"
+        android:layout_alignParentTop="true" />
+
+    <!--<ImageView-->
+        <!--android:id="@+id/imageView"-->
+        <!--android:layout_width="match_parent"-->
+        <!--android:layout_height="match_parent"-->
+        <!--app:srcCompat="@android:color/transparent"-->
+        <!--android:layout_alignParentTop="true"-->
+        <!--android:layout_alignParentEnd="true" />-->
 
 </RelativeLayout>
