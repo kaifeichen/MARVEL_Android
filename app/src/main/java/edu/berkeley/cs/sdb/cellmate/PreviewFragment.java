@@ -2,6 +2,8 @@ package edu.berkeley.cs.sdb.cellmate;
 
 import android.app.Activity;
 import android.app.Fragment;
+import android.app.FragmentManager;
+import android.app.FragmentTransaction;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -17,6 +19,7 @@ import android.os.Bundle;
 import android.util.Log;
 import android.util.Size;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
@@ -28,18 +31,21 @@ import android.widget.ImageView;
 
 public class PreviewFragment extends Fragment {
 
+
     private static final String LOG_TAG = "CellMate";
     Bitmap mBmp;
     private AutoFitTextureView mTextureView;
     // The android.util.Size of camera preview.
     private Size mPreviewSize;
+    private Size totalSize = null;
+    private Size highlightFrameSize = null;
     Surface mTextureViewSurface;
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
 
         @Override
         public void onSurfaceTextureAvailable(SurfaceTexture surfaceTexture, int width, int height) {
             Log.i(LOG_TAG, "onSurfaceTextureAvailable, width=" + width + ",height=" + height);
-
+            totalSize = new Size(width, height);
             Camera camera = Camera.getInstance();
             mPreviewSize = camera.getPreviewSize();
             Log.i(LOG_TAG, "mPreviewSize, width=" + mPreviewSize.getWidth() + ",height=" + mPreviewSize.getHeight());
@@ -108,8 +114,38 @@ public class PreviewFragment extends Fragment {
         mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
 
         mHighLight = (ImageView) view.findViewById(R.id.imageView);
+        view.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View view, MotionEvent motionEvent) {
+//                System.out.println(motionEvent.getX() + "  " + motionEvent.getY());
+                if(totalSize!=null && highlightFrameSize!=null) {
+                    double x = motionEvent.getX();
+                    double y = motionEvent.getY();
+                    double ratio = totalSize.getWidth() * 1.0/highlightFrameSize.getWidth();
+                    double newX = x/ratio;
+                    double newY = y/ratio;
+                    if(newX >= mLeft && newX <= mRight && newY>=mTop && newY<=mBottom) {
+                        mStateCallback.previewOnClicked(true, "notImplemented");
+                    } else {
+                        mStateCallback.previewOnClicked(false, null);
+                    }
+                } else {
+                    mStateCallback.previewOnClicked(false, null);
+                }
+                return true;
+            }
+        });
 
+    }
 
+    @Override
+    public void onAttach(Context context) {
+        super.onAttach(context);
+        try {
+            mStateCallback = (StateCallback) context;
+        } catch (ClassCastException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -180,6 +216,10 @@ public class PreviewFragment extends Fragment {
         mTextureView.setTransform(matrix);
     }
 
+    double mRight;
+    double mLeft;
+    double mBottom;
+    double mTop;
 
 
     public void drawHighlight(String name, double x, double y, double size, double width, double height) {
@@ -187,35 +227,37 @@ public class PreviewFragment extends Fragment {
         if (activity != null) {
             activity.runOnUiThread(() -> {
                 if (x != -1) {
+                    highlightFrameSize = new Size((int)width, (int)height);
 
-                Paint paint = new Paint();
-                paint.setColor(Color.BLUE);
-                paint.setStyle(Paint.Style.STROKE);
-                if (mBmp != null && !mBmp.isRecycled()) {
-                    mBmp.recycle();
-                }
+                    Paint paint = new Paint();
+                    paint.setColor(Color.BLUE);
+                    paint.setStyle(Paint.Style.STROKE);
+                    if (mBmp != null && !mBmp.isRecycled()) {
+                        mBmp.recycle();
+                    }
 
 
 
-                Bitmap mBmp = Bitmap.createBitmap((int)width, (int)height, Bitmap.Config.ARGB_8888);
-                Canvas canvas = new Canvas(mBmp);
-                double right = x + size;
-                double left = x  - size;
-                double bottom = y + size;
-                double top = y - size;
+                    Bitmap mBmp = Bitmap.createBitmap((int)width, (int)height, Bitmap.Config.ARGB_8888);
+                    Canvas canvas = new Canvas(mBmp);
+                    mRight = x + size;
+                    mLeft = x  - size;
+                    mBottom = y + size;
+                    mTop = y - size;
 
-                Rect rect = new Rect((int) (left), (int) (top), (int) (right), (int) (bottom));
-                Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
-                Rect rect3 = new Rect((int) 0, (int) height - 10, (int) (10), (int) (height));
-                Rect rect4 = new Rect((int) width - 10, (int) 0, (int) (width), (int) (10));
-                Rect rect5 = new Rect((int) width - 10, (int) height - 10, (int) (width), (int) (height));
-                canvas.drawRect(rect, paint);
-                canvas.drawRect(rect2, paint);
-                canvas.drawRect(rect3, paint);
-                canvas.drawRect(rect4, paint);
-                canvas.drawRect(rect5, paint);
-                mHighLight.setImageBitmap(mBmp);
+                    Rect rect = new Rect((int) (mLeft), (int) (mTop), (int) (mRight), (int) (mBottom));
+                    Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
+                    Rect rect3 = new Rect((int) 0, (int) height - 10, (int) (10), (int) (height));
+                    Rect rect4 = new Rect((int) width - 10, (int) 0, (int) (width), (int) (10));
+                    Rect rect5 = new Rect((int) width - 10, (int) height - 10, (int) (width), (int) (height));
+                    canvas.drawRect(rect, paint);
+                    canvas.drawRect(rect2, paint);
+                    canvas.drawRect(rect3, paint);
+                    canvas.drawRect(rect4, paint);
+                    canvas.drawRect(rect5, paint);
+                    mHighLight.setImageBitmap(mBmp);
                 } else {
+                    highlightFrameSize = null;
                     if (mBmp != null && !mBmp.isRecycled()) {
                         mBmp.recycle();
                     }
@@ -238,6 +280,8 @@ public class PreviewFragment extends Fragment {
 
 
 
-
-
+    private StateCallback mStateCallback;
+    public interface StateCallback {
+        void previewOnClicked(boolean isTargeting,String target);
+    }
 }

@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
     <EditTextPreference
+        android:defaultValue="@string/query_rate_val"
+        android:key="@string/query_rate_key"
+        android:numeric="decimal"
+        android:title="@string/query_rate_title"/>
+    <EditTextPreference
         android:defaultValue="@string/grpc_server_addr_val"
         android:key="@string/grpc_server_addr_key"
         android:title="@string/grpc_server_addr_title" />
@@ -31,18 +36,6 @@
         android:defaultValue="@string/bosswave_key_base64_val"
         android:key="@string/bosswave_key_base64_key"
         android:title="@string/bosswave_key_base64_title"/>
-    <EditTextPreference
-        android:defaultValue="@string/camera_width_val"
-        android:enabled="false"
-        android:key="@string/camera_width_key"
-        android:numeric="integer"
-        android:title="@string/camera_width_title"/>
-    <EditTextPreference
-        android:defaultValue="@string/camera_height_val"
-        android:enabled="false"
-        android:key="@string/camera_height_key"
-        android:numeric="integer"
-        android:title="@string/camera_height_title"/>
     <EditTextPreference
         android:defaultValue="@string/camera_fx_val"
         android:key="@string/camera_fx_key"

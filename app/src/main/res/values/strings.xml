@@ -38,12 +38,6 @@
     <string name="bosswave_key_base64_key">bosswave_key_base64</string>
     <string name="bosswave_key_base64_title">BOSSWAVE key in Base64 (not a good idea)</string>
     <string name="bosswave_key_base64_val">MvQf3NbUJZbup7ToYhfVitMeGPX8vf0oQCZnp/TXpG5vu5ZfksWQzeqM5PETdum72J1a6UexHHzF+69v2HTpzNcCCJeiavGi9EIUAwjmoLBMSQgjFQUhS2FpZmVpIENoZW4gPGthaWZlaUBiZXJrZWxleS5lZHU+BgpNYXN0ZXIgS2V5AN0gC2JfUURxujnRcme3c9rxhW1CPnraNY563ZFRga8mpJVGGb3pqNYRc0cv4NONnZIRgJSfVhSdjR0Mb2tatwY=</string>
-    <string name="camera_width_key">camera_width</string>
-    <string name="camera_width_title">Camera Width (pixel)</string>
-    <string name="camera_width_val">0</string>
-    <string name="camera_height_key">camera_height</string>
-    <string name="camera_height_title">Camera Height (pixel)</string>
-    <string name="camera_height_val">0</string>
     <string name="camera_fx_key">camera_fx</string>
     <string name="camera_fx_title">Camera fx (pixel)</string>
     <string name="camera_fx_val">0.0</string>
@@ -56,4 +50,7 @@
     <string name="camera_cy_key">camera_cy</string>
     <string name="camera_cy_title">Camera cy (pixel)</string>
     <string name="camera_cy_val">0.0</string>
+    <string name="query_rate_key">query_rate</string>
+    <string name="query_rate_title">Query Frame Rate (frames/seconds)</string>
+    <string name="query_rate_val">2</string>
 </resources>
