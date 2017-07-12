@@ -42,7 +42,4 @@
         android:layout_gravity="center"
         android:text="@string/off" />
 
-
-
-
 </RelativeLayout>

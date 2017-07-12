@@ -29,7 +29,7 @@ import android.view.WindowManager;
 
 import com.splunk.mint.Mint;
 
-public class MainActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback,  ControlFragment.StateCallback {
+public class MainActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback,  IdentificationFragment.StateCallback, PreviewFragment.StateCallback {
     private static final String MINT_API_KEY = "76da1102";
 
     private static final int REQUEST_CAMERA_PERMISSION = 1;
@@ -86,8 +86,31 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     }
 
-
-
+    @Override
+    public void previewOnClicked(boolean isTargeting,String target) {
+        if(mMode == Mode.CALIBRATION) {
+            return;
+        }
+        if(isTargeting) {
+            FragmentManager fm = getFragmentManager();
+            FragmentTransaction ft = fm.beginTransaction();
+            ControlFragment controlFragment = (ControlFragment) getFragmentManager().findFragmentById(R.id.task_fragment);
+            if(controlFragment != null) {
+                ft.remove(controlFragment);
+            }
+            controlFragment = new ControlFragment();
+            ft.replace(R.id.task_fragment, controlFragment);
+            ft.commit();
+        } else {
+            FragmentManager fm = getFragmentManager();
+            FragmentTransaction ft = fm.beginTransaction();
+            ControlFragment controlFragment = (ControlFragment) getFragmentManager().findFragmentById(R.id.task_fragment);
+            if(controlFragment != null) {
+                ft.remove(controlFragment);
+                ft.commit();
+            }
+        }
+    }
 
 
 
@@ -178,8 +201,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             Log.i("MainActivity", "after createDefaultFragments");
             mMode = Mode.PREVIEW;
 
-            ControlFragment controlFragment = ControlFragment.newInstance();
-            getFragmentManager().beginTransaction().replace(R.id.task_fragment, controlFragment).commit();
+            IdentificationFragment identificationFragment = IdentificationFragment.newInstance();
+            getFragmentManager().beginTransaction().replace(R.id.identification_fragment, identificationFragment).commit();
 
             mMode = Mode.CONTROL;
 
@@ -202,26 +225,51 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 Intent intent = new Intent(this, SettingsActivity.class);
                 startActivity(intent);
                 return true;
-            case R.id.calibration:
+            case R.id.calibration: {
                 PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
+
                 if(previewFragment != null) {
                     previewFragment.clearHighlight();
                 }
                 FragmentManager fm = getFragmentManager();
                 FragmentTransaction ft = fm.beginTransaction();
+                if(mMode == Mode.CONTROL) {
+                    ControlFragment controlFragment = (ControlFragment) getFragmentManager().findFragmentById(R.id.task_fragment);
+                    if(controlFragment != null) {
+                        ft.remove(controlFragment);
+                    }
+                } else {
+                    CalibrationFragment calibrationFragment = (CalibrationFragment) getFragmentManager().findFragmentById(R.id.task_fragment);
+                    if(calibrationFragment != null) {
+                        ft.remove(calibrationFragment);
+                    }
+                }
                 CalibrationFragment calibrationFragment = new CalibrationFragment();
                 ft.replace(R.id.task_fragment, calibrationFragment);
+                IdentificationFragment identificationFragment = (IdentificationFragment) getFragmentManager().findFragmentById(R.id.identification_fragment);
+                if(identificationFragment != null) {
+                    ft.remove(identificationFragment);
+                }
                 ft.commit();
                 mMode = Mode.CALIBRATION;
                 return true;
-            case R.id.control:
+            }
+            case R.id.control: {
+                if(mMode == Mode.CONTROL) {
+                    return true;
+                }
                 FragmentManager fm2 = getFragmentManager();
                 FragmentTransaction ft2 = fm2.beginTransaction();
-                ControlFragment controlFragment = ControlFragment.newInstance();
-                ft2.replace(R.id.task_fragment, controlFragment, TAG_CALIBRATION_FRAGMENT);
+                IdentificationFragment identificationFragment2 = IdentificationFragment.newInstance();
+                CalibrationFragment calibrationFragment2 = (CalibrationFragment) getFragmentManager().findFragmentById(R.id.task_fragment);
+                if(calibrationFragment2 != null) {
+                    ft2.remove(calibrationFragment2);
+                }
+                ft2.replace(R.id.identification_fragment, identificationFragment2, TAG_CALIBRATION_FRAGMENT);
                 ft2.commit();
                 mMode = Mode.CONTROL;
                 return true;
+            }
             default:
                 return super.onOptionsItemSelected(item);
         }
