@@ -11,6 +11,7 @@ import android.graphics.ImageFormat;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
@@ -29,6 +30,9 @@ import com.google.protobuf.ByteString;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import android.provider.Settings.Secure;
+
+
 
 
 public class CalibrationFragment extends Fragment {
@@ -45,6 +49,7 @@ public class CalibrationFragment extends Fragment {
     ProgressBar mProgressBar;
     Button mCaptureButton;
     String mCaptureButtonContents;
+    GrpcSendTask.QueryType mType;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -52,9 +57,11 @@ public class CalibrationFragment extends Fragment {
         // retain this fragment
         setRetainInstance(true);
         mImages = new ArrayList<>();
-        mProgressTextContents = String.valueOf(mImages.size()) + "/" + String.valueOf(mTotal);
+        mProgressTextContents = "Connecting to Server\nAuto Calibrating";
         mCaptureButtonContents = getString(R.string.capture);
         mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
+        mType = GrpcSendTask.QueryType.QUERY;
+
     }
 
     @Nullable
@@ -72,6 +79,7 @@ public class CalibrationFragment extends Fragment {
         mProgressBar.setProgress(mImages.size());
         mCaptureButton = (Button) view.findViewById(R.id.capture);
         mCaptureButton.setText(mCaptureButtonContents);
+        setButtonsEnabled(false);
         mCaptureButton.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 // Code here executes on main thread after user presses button
@@ -85,11 +93,16 @@ public class CalibrationFragment extends Fragment {
                     mProgressBar.setProgress(0);
                     mProgressTextContents = String.valueOf(mImages.size()) + "/" + String.valueOf(mTotal);
                     mProgressText.setText(mProgressTextContents);
-
+                    mType = GrpcSendTask.QueryType.CALIBRATE;
                 }
 
             }
         });
+
+        final Activity activity = getActivity();
+        if (activity != null) {
+            activity.runOnUiThread(new GrpcPostImageRunnable(GrpcSendTask.QueryType.QUERY));
+        }
 
         Camera camera = Camera.getInstance();
         Size captureSize = camera.getCaptureSize();
@@ -145,7 +158,7 @@ public class CalibrationFragment extends Fragment {
                     mProgressText.setText(mProgressTextContents);
                     final Activity activity = getActivity();
                     if (activity != null) {
-                        activity.runOnUiThread(new GrpcPostImageRunnable());
+                        activity.runOnUiThread(new GrpcPostImageRunnable(GrpcSendTask.QueryType.CALIBRATE));
                     }
                 }
 
@@ -173,18 +186,24 @@ public class CalibrationFragment extends Fragment {
     }
 
     private class GrpcPostImageRunnable implements Runnable {
-        public GrpcPostImageRunnable() {
-
+        GrpcSendTask.QueryType mType;
+        public GrpcPostImageRunnable(GrpcSendTask.QueryType type) {
+            mType = type;
         }
 
         @Override
         public void run() {
             try {
+                String android_id = Secure.getString(getActivity().getContentResolver(),
+                        Secure.ANDROID_ID);
+                Camera camera = Camera.getInstance();
+                Size captureSize = camera.getCaptureSize();
+
                 Activity activity = getActivity();
                 SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
                 String Host = preferences.getString(getString(R.string.calibration_server_addr_key), getString(R.string.calibration_server_addr_val));
                 String Port = preferences.getString(getString(R.string.calibration_server_port_key), getString(R.string.calibration_server_port_val));
-                new GrpcSendTask(Host, Integer.valueOf(Port), mImages, mGrpcCalibrationListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+                new GrpcSendTask(Host, Integer.valueOf(Port), mImages, mType, android_id, captureSize, mGrpcCalibrationListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -193,32 +212,77 @@ public class CalibrationFragment extends Fragment {
 
     private GrpcSendTask.Listener mGrpcCalibrationListener = new GrpcSendTask.Listener() {
         @Override
-        public void onResponse(double[] matrix) { // null means network error
-            if (matrix == null) {
-                mProgressTextContents = "Calibration Failed, Please make sure:\n" +
-                        "1. Your camera is capturing Chessbord picture\n" +
-                        "2. Your phone has internet access\n" +
-                        "3. Calibration server host and port in setting is correctly settled";
-                mProgressText.setText(mProgressTextContents);
-            } else {
-                Activity activity = getActivity();
-                SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
-                SharedPreferences.Editor editor = preferences.edit();
-                editor.putString(getString(R.string.camera_fx_key), Double.toString(matrix[0]));
-                editor.putString(getString(R.string.camera_fy_key), Double.toString(matrix[1]));
-                editor.putString(getString(R.string.camera_cx_key), Double.toString(matrix[2]));
-                editor.putString(getString(R.string.camera_cy_key), Double.toString(matrix[3]));
-                editor.apply();
+        public void onResponse(CalibrationProto.CameraMatrix matrix) { // null means network error
+            System.out.println("grpc sendtask onResponse");
+            if(mType == GrpcSendTask.QueryType.QUERY) {
+                System.out.println("grpc sendtask onResponse -> QUERY");
+                if (matrix == null) {
+                    System.out.println("grpc sendtask onResponse -> QUERY -> null");
+                    //Calibration Fragment just started
+                    //But cannot connect to server, either server is died, or phone no wifi
+                    mProgressTextContents = "Auto Calibration Failed, Please make sure:\n" +
+                            "1. Your phone has internet access\n" +
+                            "2. Calibration server host and port in setting is correctly settled\n" +
+                            "3. Calibration server is on\n" +
+                            "Then start calibration fragment in setting again" ;
+                    mProgressText.setText(mProgressTextContents);
+                } else {
+                    System.out.println(matrix.getResultMessage());
+                    if(matrix.getResultMessage().compareTo("Succeed") == 0) {
+                        System.out.println("grpc sendtask onResponse -> succeed");
+                        Activity activity = getActivity();
+                        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
+                        SharedPreferences.Editor editor = preferences.edit();
+                        editor.putString(getString(R.string.camera_fx_key), Double.toString(matrix.getFx()));
+                        editor.putString(getString(R.string.camera_fy_key), Double.toString(matrix.getFy()));
+                        editor.putString(getString(R.string.camera_cx_key), Double.toString(matrix.getCx()));
+                        editor.putString(getString(R.string.camera_cy_key), Double.toString(matrix.getCy()));
+                        editor.apply();
+                        mProgressTextContents = "Calibration Done, Result is saved to Settings";
+                        mProgressText.setText(mProgressTextContents);
+                    } else if(matrix.getResultMessage().compareTo("Model did not found") == 0){
+                        System.out.println("grpc sendtask onResponse -> Model did not found");
+                        mProgressTextContents = "There is no saved record of this phone, please manually calibrate";
+                        mProgressText.setText(mProgressTextContents);
+                    } else {
+                        System.out.println("grpc sendtask onResponse -> None");
+                        throw new IllegalStateException("Response in illegal state");
+                    }
+                    mCaptureButton.setText(getString(R.string.calibrate_again));
+                    mCaptureButtonContents = getString(R.string.calibrate_again);
+                    setButtonsEnabled(true);
+                }
+            } else if(mType == GrpcSendTask.QueryType.CALIBRATE){
+                if (matrix == null) {
+                    mProgressTextContents = "Calibration Failed, Please make sure:\n" +
+                            "1. Your phone has internet access\n" +
+                            "2. Calibration server host and port in setting is correctly settled" +
+                            "3. THe calibration server is on";
+                    mProgressText.setText(mProgressTextContents);
+                } else {
+                    if(matrix.getResultMessage().compareTo("Succeed") == 0) {
+                        Activity activity = getActivity();
+                        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
+                        SharedPreferences.Editor editor = preferences.edit();
+                        editor.putString(getString(R.string.camera_fx_key), Double.toString(matrix.getFx()));
+                        editor.putString(getString(R.string.camera_fy_key), Double.toString(matrix.getFy()));
+                        editor.putString(getString(R.string.camera_cx_key), Double.toString(matrix.getCx()));
+                        editor.putString(getString(R.string.camera_cy_key), Double.toString(matrix.getCy()));
+                        editor.apply();
 
-                mProgressTextContents = "Calibration Done, Result is saved to Settings";
-                mProgressText.setText(mProgressTextContents);
+                        mProgressTextContents = "Calibration Done, Result is saved to Settings";
+                        mProgressText.setText(mProgressTextContents);
+                    } else if(matrix.getResultMessage().compareTo("Invalid")==0) {
+                        mProgressTextContents = "Calibration Failed, Please make sure:\n" +
+                                "You are takeing the picture of chessboard";
+                        mProgressText.setText(mProgressTextContents);
+                    }
+                }
+                mCaptureButton.setText(getString(R.string.calibrate_again));
+                mCaptureButtonContents = getString(R.string.calibrate_again);
+            } else {
+                throw new IllegalStateException("Calibration fragment in illegal state");
             }
-            mCaptureButton.setText(getString(R.string.calibrate_again));
-            mCaptureButtonContents = getString(R.string.calibrate_again);
         }
     };
-
-
-
-
 }

@@ -498,8 +498,8 @@ public class Camera {
                 //Use screen size as a reference of aspect ratio to target capture size and preview size
                 //When capture size and preview size aspect ratio is the same, we know that they get the same image with different resolution
                 mScreenSize = new Size(displaySize.x,displaySize.y);
-                System.out.println("mScreenSize");
-                System.out.println(mScreenSize);
+//                System.out.println("mScreenSize");
+//                System.out.println(mScreenSize);
                 //For capture, choose the smallest size but above 480 resolution
                 //Assuming there is at least a size fit the aspect ratio of the screen
                 for(Size option : map.getOutputSizes(ImageFormat.JPEG)) {
@@ -515,8 +515,8 @@ public class Camera {
                         }
                     }
                 }
-                System.out.println("mCaptureSize");
-                System.out.println(mCaptureSize);
+//                System.out.println("mCaptureSize");
+//                System.out.println(mCaptureSize);
 
 
 
@@ -537,8 +537,8 @@ public class Camera {
 
                     }
                 }
-                System.out.println("mpreviewSize");
-                System.out.println(mPreviewSize);
+//                System.out.println("mpreviewSize");
+//                System.out.println(mPreviewSize);
             }
         } catch (CameraAccessException e) {
             e.printStackTrace();
