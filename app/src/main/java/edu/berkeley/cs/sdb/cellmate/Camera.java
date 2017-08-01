@@ -509,7 +509,7 @@ public class Camera {
                         if(mCaptureSize == null) {
                             mCaptureSize = option;
                         } else {
-                            if(mCaptureSize.getHeight() * mCaptureSize.getWidth() > option.getHeight() * option.getWidth()) {
+                            if(mCaptureSize.getHeight() * mCaptureSize.getWidth() < option.getHeight() * option.getWidth()) {
                                 mCaptureSize = option;
                             }
                         }
