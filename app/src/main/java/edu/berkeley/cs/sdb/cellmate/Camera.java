@@ -505,11 +505,11 @@ public class Camera {
                 for(Size option : map.getOutputSizes(ImageFormat.JPEG)) {
 //                    System.out.println(option);
                     if(option.getWidth()*displaySize.x == option.getHeight()*displaySize.y
-                            && Math.min(option.getWidth(), option.getHeight()) >= 480) {
+                            && Math.min(option.getWidth(), option.getHeight()) <= 480) {
                         if(mCaptureSize == null) {
                             mCaptureSize = option;
                         } else {
-                            if(mCaptureSize.getHeight() * mCaptureSize.getWidth() > option.getHeight() * option.getWidth()) {
+                            if(mCaptureSize.getHeight() * mCaptureSize.getWidth() < option.getHeight() * option.getWidth()) {
                                 mCaptureSize = option;
                             }
                         }
