@@ -29,6 +29,8 @@ import android.view.WindowManager;
 
 import com.splunk.mint.Mint;
 
+import java.util.List;
+
 public class MainActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback,  IdentificationFragment.StateCallback, PreviewFragment.StateCallback {
     private static final String MINT_API_KEY = "76da1102";
 
@@ -78,7 +80,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
 
     @Override
-    public void onObjectIdentified(String name, double x, double y, double size, double width, double height) {
+    public void onObjectIdentified(List<String> name, List<Double> x, List<Double> y, List<Double> size, double width, double height) {
         PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
         if(previewFragment != null) {
             previewFragment.drawHighlight(name, x, y, size, width, height);
@@ -99,6 +101,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 ft.remove(controlFragment);
             }
             controlFragment = new ControlFragment();
+            controlFragment.setTarget(target);
             ft.replace(R.id.task_fragment, controlFragment);
             ft.commit();
         } else {
