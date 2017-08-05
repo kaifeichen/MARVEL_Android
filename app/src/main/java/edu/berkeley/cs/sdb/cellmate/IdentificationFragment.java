@@ -156,20 +156,22 @@ public class IdentificationFragment extends Fragment {
             if (activity != null) {
                 activity.runOnUiThread(() -> {
                     try {
-                        showToast(value.getName() + " recognized", Toast.LENGTH_SHORT);
+                        mStateCallback.onObjectIdentified(value.getNameList(), value.getXList(), value.getYList(),value.getSizeList() , value.getWidth(), value.getHeight());
 
-                        mRecentObjects.add(value.getName());
-                        if (mRecentObjects.size() > CIRCULAR_BUFFER_LENGTH) {
-                            mRecentObjects.remove(0);
-                        }
-                        mTargetObject = findCommon(mRecentObjects);
-                        if (mTargetObject == null || mTargetObject.equals("None")) {
-                            mTargetObject = null;
-                            mTextView.setText(getString(R.string.none));
-                        } else {
-                            mStateCallback.onObjectIdentified(value.getName(), value.getX(), value.getY(),value.getSize() , value.getWidth(), value.getHeight());
-                            mTextView.setText(mTargetObject);
-                        }
+//                        showToast(value.getName() + " recognized", Toast.LENGTH_SHORT);
+
+//                        mRecentObjects.addAll(value.getNameList());
+//                        if (mRecentObjects.size() > CIRCULAR_BUFFER_LENGTH) {
+//                            mRecentObjects.remove(0);
+//                        }
+//                        mTargetObject = findCommon(mRecentObjects);
+//                        if (mTargetObject == null || mTargetObject.equals("None")) {
+//                            mTargetObject = null;
+//                            mTextView.setText(getString(R.string.none));
+//                        } else {
+//                            mStateCallback.onObjectIdentified(value.getName(), value.getX(), value.getY(),value.getSize() , value.getWidth(), value.getHeight());
+//                            mTextView.setText(mTargetObject);
+//                        }
                     } catch (IllegalStateException e) {
                         //Do nothing
                         //To fix "Fragment ControlFragment{2dab555} not attached to Activity"
@@ -478,6 +480,6 @@ public class IdentificationFragment extends Fragment {
 
 
     public interface StateCallback {
-        void onObjectIdentified(String name, double x, double y, double size, double width, double height);
+        void onObjectIdentified(List<String> name, List<Double> x, List<Double> y, List<Double> size, double width, double height);
     }
 }

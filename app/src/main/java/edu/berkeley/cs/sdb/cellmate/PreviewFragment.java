@@ -27,6 +27,8 @@ import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.ImageView;
 
+import java.util.ArrayList;
+import java.util.List;
 
 
 public class PreviewFragment extends Fragment {
@@ -124,11 +126,15 @@ public class PreviewFragment extends Fragment {
                     double ratio = totalSize.getWidth() * 1.0/highlightFrameSize.getWidth();
                     double newX = x/ratio;
                     double newY = y/ratio;
-                    if(newX >= mLeft && newX <= mRight && newY>=mTop && newY<=mBottom) {
-                        mStateCallback.previewOnClicked(true, "notImplemented");
-                    } else {
-                        mStateCallback.previewOnClicked(false, null);
+                    for(int i = 0; i < mName.size(); i++) {
+                        if(newX >= mLeft.get(i) && newX <= mRight.get(i) && newY>=mTop.get(i) && newY<=mBottom.get(i)) {
+                            mStateCallback.previewOnClicked(true, mName.get(i));
+                            return true;
+                        }
+
                     }
+                    mStateCallback.previewOnClicked(false, null);
+
                 } else {
                     mStateCallback.previewOnClicked(false, null);
                 }
@@ -216,17 +222,18 @@ public class PreviewFragment extends Fragment {
         mTextureView.setTransform(matrix);
     }
 
-    double mRight;
-    double mLeft;
-    double mBottom;
-    double mTop;
+    ArrayList<String> mName = new ArrayList<>();
+    ArrayList<Double> mRight = new ArrayList<>();
+    ArrayList<Double> mLeft = new ArrayList<>();
+    ArrayList<Double> mBottom = new ArrayList<>();
+    ArrayList<Double> mTop = new ArrayList<>();
 
 
-    public void drawHighlight(String name, double x, double y, double size, double width, double height) {
+    public void drawHighlight(List<String> name, List<Double> x, List<Double> y, List<Double> size, double width, double height) {
         final Activity activity = getActivity();
         if (activity != null) {
             activity.runOnUiThread(() -> {
-                if (x != -1) {
+                if (x.get(0) != -1) {
                     highlightFrameSize = new Size((int)width, (int)height);
 
                     Paint paint = new Paint();
@@ -240,21 +247,34 @@ public class PreviewFragment extends Fragment {
 
                     Bitmap mBmp = Bitmap.createBitmap((int)width, (int)height, Bitmap.Config.ARGB_8888);
                     Canvas canvas = new Canvas(mBmp);
-                    mRight = x + size;
-                    mLeft = x  - size;
-                    mBottom = y + size;
-                    mTop = y - size;
+                    mName.clear();
+                    mRight.clear();
+                    mLeft.clear();
+                    mBottom.clear();
+                    mTop.clear();
+                    for(int i = 0; i < name.size(); i++) {
+                        mName.add(name.get(i));
+                        mRight.add(x.get(i) + size.get(i));
+                        mLeft.add(x.get(i)  - size.get(i));
+                        mBottom.add(y.get(i) + size.get(i));
+                        mTop.add(y.get(i) - size.get(i));
 
-                    Rect rect = new Rect((int) (mLeft), (int) (mTop), (int) (mRight), (int) (mBottom));
-                    Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
-                    Rect rect3 = new Rect((int) 0, (int) height - 10, (int) (10), (int) (height));
-                    Rect rect4 = new Rect((int) width - 10, (int) 0, (int) (width), (int) (10));
-                    Rect rect5 = new Rect((int) width - 10, (int) height - 10, (int) (width), (int) (height));
-                    canvas.drawRect(rect, paint);
-                    canvas.drawRect(rect2, paint);
-                    canvas.drawRect(rect3, paint);
-                    canvas.drawRect(rect4, paint);
-                    canvas.drawRect(rect5, paint);
+
+//                        Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
+//                        Rect rect3 = new Rect((int) 0, (int) height - 10, (int) (10), (int) (height));
+//                        Rect rect4 = new Rect((int) width - 10, (int) 0, (int) (width), (int) (10));
+//                        Rect rect5 = new Rect((int) width - 10, (int) height - 10, (int) (width), (int) (height));
+
+//                        canvas.drawRect(rect2, paint);
+//                        canvas.drawRect(rect3, paint);
+//                        canvas.drawRect(rect4, paint);
+//                        canvas.drawRect(rect5, paint);
+                        Rect rect = new Rect(mLeft.get(i).intValue(), mTop.get(i).intValue(), mRight.get(i).intValue(), mBottom.get(i).intValue());
+                        canvas.drawRect(rect, paint);
+                        paint.setTextSize(size.get(i).floatValue());
+                        canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
+                    }
+
                     mHighLight.setImageBitmap(mBmp);
                 } else {
                     highlightFrameSize = null;
