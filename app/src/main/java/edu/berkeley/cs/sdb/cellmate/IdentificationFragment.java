@@ -79,6 +79,9 @@ public class IdentificationFragment extends Fragment {
     TextView mTextView;
     TextView mInforText;
 
+    //Use the time that sending the message as the id for pose
+    HashMap<Long, float[]> poseMap;
+
 
     private Long mLastTime;
     // We keep a toast reference so it can be updated instantly
@@ -147,6 +150,27 @@ public class IdentificationFragment extends Fragment {
 //            showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
 //        }
 //    };
+
+    private float[] getPoseFromMessage(CellmateProto.ServerRespondMessage value) {
+        float[] pose = new float[16];
+        pose[0] = value.getR11();
+        pose[1] = value.getR21();
+        pose[2] = value.getR31();
+        pose[3] = 0;
+        pose[4] = value.getR12();
+        pose[5] = value.getR22();
+        pose[6] = value.getR32();
+        pose[7] = 0;
+        pose[8] = value.getR13();
+        pose[9] = value.getR23();
+        pose[10] = value.getR33();
+        pose[11] = 0;
+        pose[12] = value.getTx();
+        pose[13] = value.getTy();
+        pose[14] = value.getTz();
+        pose[15] = 1;
+        return pose;
+    }
     private List<String> mRecentObjects;
     StreamObserver<CellmateProto.ServerRespondMessage> mResponseObserver = new StreamObserver<CellmateProto.ServerRespondMessage>() {
         @Override
@@ -156,6 +180,22 @@ public class IdentificationFragment extends Fragment {
             if (activity != null) {
                 activity.runOnUiThread(() -> {
                     try {
+                        float[] Plocal0 = poseMap.get(value.getId());
+                        float[] Plocal0inv = new float[16];
+                        android.opengl.Matrix.invertM(Plocal0inv, 0, Plocal0, 0);
+                        poseMap.remove(value.getId());
+                        float[] Plocal1 = mStateCallback.getPose();
+                        float[] Pmodel0 = getPoseFromMessage(value);
+                        float[] deltaLocalTransform = new float[16];
+                        android.opengl.Matrix.multiplyMM(deltaLocalTransform, 0, Plocal1, 0, Plocal0inv, 0);
+                        float[] Pmodel1 = new float[16];
+                        android.opengl.Matrix.multiplyMM(Pmodel1, 0, deltaLocalTransform, 0, Pmodel0, 0);
+
+                        ArrayList<String> nameList = new ArrayList<>();
+                        ArrayList<Double> XList = new ArrayList<>();
+                        ArrayList<Double> YList = new ArrayList<>();
+                        ArrayList<Double> SizeList = new ArrayList<>();
+                        visibility(Pmodel1, nameList, XList, YList, SizeList);
                         mStateCallback.onObjectIdentified(value.getNameList(), value.getXList(), value.getYList(),value.getSizeList() , value.getWidth(), value.getHeight());
 
 //                        showToast(value.getName() + " recognized", Toast.LENGTH_SHORT);
@@ -210,12 +250,13 @@ public class IdentificationFragment extends Fragment {
             if (time - mLastTime > REQUEST_INTERVAL) {
                 ByteString data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
                 image.close();
+                poseMap.put(time, mStateCallback.getPose());
                 Runnable senderRunnable = new Runnable() {
                     ByteString mData;
                     int mRotateClockwiseAngle;
                     @Override
                     public void run() {
-                        sendRequestToServer(mData,mRotateClockwiseAngle);
+                        sendRequestToServer(mData,mRotateClockwiseAngle,time);
                     }
 
                     public Runnable init(ByteString data) {
@@ -272,7 +313,7 @@ public class IdentificationFragment extends Fragment {
 
 
 
-    private void sendRequestToServer(ByteString data, int rotateClockwiseAngle) {
+    private void sendRequestToServer(ByteString data, int rotateClockwiseAngle, long messageId) {
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
         double Fx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
@@ -295,6 +336,7 @@ public class IdentificationFragment extends Fragment {
                     .setFy(mFy)
                     .setCx(mCx)
                     .setCy(mCy)
+                    .setId(messageId)
                     .setAngle(rotateClockwiseAngle)
                     .build();
             mRequestObserver.onNext(request);
@@ -478,8 +520,14 @@ public class IdentificationFragment extends Fragment {
 //    }
 
 
+    private void visibility(float[] pose, List<String> name, List<Double> x, List<Double> y, List<Double> size) {
+
+    }
 
     public interface StateCallback {
         void onObjectIdentified(List<String> name, List<Double> x, List<Double> y, List<Double> size, double width, double height);
+        float[] getPose();
     }
+
+
 }
