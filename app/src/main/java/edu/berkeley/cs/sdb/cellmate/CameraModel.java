@@ -1,7 +1,10 @@
 package edu.berkeley.cs.sdb.cellmate;
 
-import android.graphics.Matrix;
+
 import android.util.Size;
+
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
 
 /**
  * Created by tongli on 9/28/17.
@@ -14,6 +17,7 @@ public class CameraModel {
     private float mFy;
     private float mCx;
     private float mCy;
+    private Mat mK;
 
     public CameraModel(String mName, Size mImageSize, float mFx, float mFy, float mCx, float mCy) {
         this.mName = mName;
@@ -22,6 +26,9 @@ public class CameraModel {
         this.mFy = mFy;
         this.mCx = mCx;
         this.mCy = mCy;
+        mK = new Mat(3,3, CvType.CV_32FC1);
+        int row = 0, col = 0;
+        mK.put(row, col, mFx, 0, mCx, 0, mFy, mCy, 0, 0, 1);
     }
 
     public String getName() {
@@ -48,9 +55,8 @@ public class CameraModel {
         return mCy;
     }
 
-    public Matrix K() {
-        //need to change to cv::mat later
-        return new Matrix();
+    public Mat K() {
+        return mK;
     }
 
     public boolean isValid() {

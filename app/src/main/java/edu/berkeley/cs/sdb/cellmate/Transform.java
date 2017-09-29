@@ -2,81 +2,81 @@ package edu.berkeley.cs.sdb.cellmate;
 
 import android.opengl.Matrix;
 
+import org.opencv.core.CvType;
+import org.opencv.core.Mat;
+
 /**
  * Created by tongli on 9/28/17.
  */
 
 public class Transform {
-    float []mData;
+    private Mat mData;
+
     public Transform(float r11, float r12, float r13, float t14, //
                      float r21, float r22, float r23, float t24, //
                      float r31, float r32, float r33, float t34) {
-        mData = new float[16];
-        mData[0] = r11;  mData[4] = r12;  mData[8] = r13;   mData[12] = t14;
-        mData[1] = r21;  mData[5] = r22;  mData[9] = r23;   mData[13] = t24;
-        mData[2] = r31;  mData[6] = r32;  mData[10] = r33;  mData[14] = t34;
-        mData[3] = 0;    mData[7] = 0;    mData[11] = 0;    mData[15] = 1;
+        mData = new Mat(4,4, CvType.CV_32FC1);
+        int row = 0, col = 0;
+        mData.put(row, col, r11, r12, r13, t14, r21, r22, r23, t24, r31, r32, r33, t34, 0, 0, 0, 1);
     }
 
-    private Transform(float [] data) {
+    private Transform(Mat data) {
         mData = data;
     }
 
+
+
     public float r11() {
-        return mData[0];
+        return (float)mData.get(0,0)[0];
     }
 
     public float r12() {
-        return mData[4];
+        return (float)mData.get(0,1)[0];
     }
 
     public float r13() {
-        return mData[8];
+        return (float)mData.get(0,2)[0];
     }
 
     public float r21() {
-        return mData[1];
+        return (float)mData.get(1,0)[0];
     }
 
     public float r22() {
-        return mData[5];
+        return (float)mData.get(1,1)[0];
     }
 
     public float r23() {
-        return mData[9];
+        return (float)mData.get(1,2)[0];
     }
 
     public float r31() {
-        return mData[2];
+        return (float)mData.get(2,0)[0];
     }
 
     public float r32() {
-        return mData[6];
+        return (float)mData.get(2,1)[0];
     }
 
     public float r33() {
-        return mData[10];
+        return (float)mData.get(2,2)[0];
     }
 
     public float x() {
-        return mData[12];
+        return (float)mData.get(0,3)[0];
     }
 
     public float y() {
-        return mData[13];
+        return (float)mData.get(1,3)[0];
     }
 
     public float z() {
-        return mData[14];
+        return (float)mData.get(2,3)[0];
     }
 
     public Transform inverse() {
-        float [] inv = new float[16];
-        Matrix.invertM(inv, 0, mData, 0);
-        return new Transform(inv);
+        return new Transform(mData.inv());
     }
 
-    public float[] toEigen3f(){
-        throw new IllegalStateException("Not yet Implemented");
-    }
+
 }
