@@ -83,6 +83,9 @@ public class IdentificationFragment extends Fragment {
     HashMap<Long, float[]> poseMap;
 
 
+    HashMap<Integer, List<Label>> labels;
+
+
     private Long mLastTime;
     // We keep a toast reference so it can be updated instantly
     private Toast mToast;
@@ -359,7 +362,6 @@ public class IdentificationFragment extends Fragment {
     }
 
     StreamObserver<CellmateProto.ClientQueryMessage> createNewRequestObserver() {
-        mChannel = ManagedChannelBuilder.forAddress(mHost, Integer.valueOf(mPort)).usePlaintext(true).build();
         return GrpcServiceGrpc.newStub(mChannel).onClientQuery(mResponseObserver);
     }
 
@@ -424,8 +426,28 @@ public class IdentificationFragment extends Fragment {
 
 
         copyAllPreferenceValue();
-        mRequestObserver = createNewRequestObserver();
 
+
+        poseMap = new HashMap<>();
+        labels = new HashMap<>();
+        mChannel = ManagedChannelBuilder.forAddress(mHost, Integer.valueOf(mPort)).usePlaintext(true).build();
+        mRequestObserver = createNewRequestObserver();
+        GrpcServiceGrpc.GrpcServiceBlockingStub stub = GrpcServiceGrpc.newBlockingStub(mChannel);
+        CellmateProto.Empty message = CellmateProto.Empty.newBuilder().build();
+        CellmateProto.Models models = stub.getModels(message);
+        List<CellmateProto.Model> modelList = models.getModelsList();
+        for(CellmateProto.Model model : modelList) {
+            List<Label> labelsInModel = new ArrayList<>();
+            for(CellmateProto.Label label: model.getLabelsList()) {
+                double []position = new double[3];
+                position[0] = label.getX();
+                position[1] = label.getY();
+                position[2] = label.getZ();
+                labelsInModel.add(new Label(label.getRoomId(), position, label.getName()));
+                System.out.println(label.getName());
+            }
+            labels.put(model.getId(), labelsInModel);
+        }
     }
 
     @Override
@@ -448,6 +470,9 @@ public class IdentificationFragment extends Fragment {
         Camera camera = Camera.getInstance();
         Log.i("CellMate","control fragment register++++");
         camera.registerPreviewSurface(mImageReader.getSurface());
+
+
+
     }
 
     @Override
@@ -503,6 +528,8 @@ public class IdentificationFragment extends Fragment {
         }
     }
 
+
+
 //    /**
 //     * Enables or disables click events for all buttons.
 //     *
@@ -523,6 +550,7 @@ public class IdentificationFragment extends Fragment {
     private void visibility(float[] pose, List<String> name, List<Double> x, List<Double> y, List<Double> size) {
 
     }
+
 
     public interface StateCallback {
         void onObjectIdentified(List<String> name, List<Double> x, List<Double> y, List<Double> size, double width, double height);
