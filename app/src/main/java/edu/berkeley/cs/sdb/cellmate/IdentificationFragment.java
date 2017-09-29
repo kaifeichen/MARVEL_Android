@@ -3,63 +3,37 @@ package edu.berkeley.cs.sdb.cellmate;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
-import android.content.Intent;
 import android.content.SharedPreferences;
-import android.content.pm.ActivityInfo;
-import android.content.res.Configuration;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.ImageFormat;
-import android.graphics.Matrix;
-import android.graphics.Paint;
-import android.graphics.Rect;
-import android.graphics.RectF;
-import android.graphics.SurfaceTexture;
 import android.media.Image;
 import android.media.ImageReader;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.preference.PreferenceManager;
-import android.support.v13.app.FragmentCompat;
-import android.support.v7.app.ActionBar;
-import android.support.v7.app.AppCompatActivity;
-import android.util.Base64;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import android.util.Pair;
 import android.util.Size;
 import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuInflater;
-import android.view.MenuItem;
-import android.view.Surface;
-import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import com.google.protobuf.ByteString;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
-import edu.berkeley.cs.sdb.bosswave.BosswaveClient;
-import edu.berkeley.cs.sdb.bosswave.PayloadObject;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
 
+import org.opencv.android.InstallCallbackInterface;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfDouble;
 import org.opencv.core.MatOfPoint3f;
@@ -93,99 +67,21 @@ public class IdentificationFragment extends Fragment {
     TextView mInforText;
 
     //Use the time that sending the message as the id for pose
-    HashMap<Long, float[]> poseMap;
-
-
-    HashMap<Integer, List<Label>> labels;
+    private HashMap<Long, Transform> mPoseMap;
+    private HashMap<Integer, List<Label>> mLabels;
+    private  int mRoomId;
 
 
     private Long mLastTime;
     // We keep a toast reference so it can be updated instantly
     private Toast mToast;
-//    private final BwPubCmdTask.Listener mBwPubTaskListener = (String response) -> {
-//        showToast("Control command sent: " + response, Toast.LENGTH_SHORT);
-//        setButtonsEnabled(true, true);
-//    };
-    // The Bosswave Client used for sending control command
-//    private BosswaveClient mBosswaveClient;
-//    // Whethre the Bosswave Client is connected
-//    private boolean mIsBosswaveConnected;
-//    private final BwCloseTask.Listener mBwCloseTaskListener = (boolean success) -> {
-//        if (success) {
-//            showToast("Bosswave disconnected", Toast.LENGTH_SHORT);
-//            mIsBosswaveConnected = false;
-//            mBosswaveClient = null;
-//            // always try to reconnect
-//            initBosswaveClient();
-//        } else {
-//            showToast("Bosswave close failed", Toast.LENGTH_SHORT);
-//        }
-//    };
-//    private final SharedPreferences.OnSharedPreferenceChangeListener mOnSharedPreferenceChanged = (SharedPreferences sharedPreferences, String key) -> {
-//        // when BOSSWAVE router changes, we need to reconnect
-//        if(getActivity() != null) {
-//            if (key.equals(getString(R.string.bosswave_router_addr_key)) || key.equals(getString(R.string.bosswave_router_port_key)) || key.equals(getString(R.string.bosswave_key_base64_key))) {
-//                if (mIsBosswaveConnected) {
-//                    new BwCloseTask(mBosswaveClient, mBwCloseTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-//                } else {
-//                    initBosswaveClient();
-//                }
-//            }
-//        }
-//    };
-    // The current recognized object name
-    private String mTargetObject;
-//    private final BwInitTask.Listener mBwInitTaskListener = (boolean success, BosswaveClient client) -> {
-//        if (success) {
-//            showToast("Bosswave connected", Toast.LENGTH_SHORT);
-//            mBosswaveClient = client;
-//            mIsBosswaveConnected = true;
-//            if (mTargetObject != null) {
-//                setButtonsEnabled(true, true);
-//            }
-//        } else {
-//            mBosswaveClient = null;
-//            showToast("Bosswave connection failed", Toast.LENGTH_SHORT);
-//        }
-//    };
-//    private final View.OnClickListener mOnButtonOnClickListener = (View v) -> {
-//        if (mIsBosswaveConnected) {
-//            setButtonsEnabled(false, false);
-//            String topic = CONTROL_TOPIC_PREFIX + mTargetObject + CONTROL_TOPIC_SUFFIX;
-//            new BwPubCmdTask(mBosswaveClient, topic, new byte[]{1}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-//        } else {
-//            showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
-//        }
-//    };
-//    private final View.OnClickListener mOffButtonOnClickListener = (View v) -> {
-//        if (mIsBosswaveConnected) {
-//            setButtonsEnabled(false, false);
-//            String topic = CONTROL_TOPIC_PREFIX + mTargetObject + CONTROL_TOPIC_SUFFIX;
-//            new BwPubCmdTask(mBosswaveClient, topic, new byte[]{0}, new PayloadObject.Type(new byte[]{1, 0, 1, 0}), mBwPubTaskListener).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-//        } else {
-//            showToast("Bosswave is not connected", Toast.LENGTH_SHORT);
-//        }
-//    };
 
-    private float[] getPoseFromMessage(CellmateProto.ServerRespondMessage value) {
-        float[] pose = new float[16];
-        pose[0] = value.getR11();
-        pose[1] = value.getR21();
-        pose[2] = value.getR31();
-        pose[3] = 0;
-        pose[4] = value.getR12();
-        pose[5] = value.getR22();
-        pose[6] = value.getR32();
-        pose[7] = 0;
-        pose[8] = value.getR13();
-        pose[9] = value.getR23();
-        pose[10] = value.getR33();
-        pose[11] = 0;
-        pose[12] = value.getTx();
-        pose[13] = value.getTy();
-        pose[14] = value.getTz();
-        pose[15] = 1;
-        return pose;
+    private String mTargetObject;
+
+    private Transform getPoseFromMessage(CellmateProto.ServerRespondMessage value) {
+        return new Transform(value.getR11(), value.getR12(), value.getR13(), value.getTx(),
+                             value.getR21(), value.getR22(), value.getR23(), value.getTy(),
+                             value.getR31(), value.getR32(), value.getR33(), value.getTz());
     }
     private List<String> mRecentObjects;
     StreamObserver<CellmateProto.ServerRespondMessage> mResponseObserver = new StreamObserver<CellmateProto.ServerRespondMessage>() {
@@ -196,16 +92,14 @@ public class IdentificationFragment extends Fragment {
             if (activity != null) {
                 activity.runOnUiThread(() -> {
                     try {
-                        float[] Plocal0 = poseMap.get(value.getId());
-                        float[] Plocal0inv = new float[16];
-                        android.opengl.Matrix.invertM(Plocal0inv, 0, Plocal0, 0);
-                        poseMap.remove(value.getId());
-                        float[] Plocal1 = mStateCallback.getPose();
-                        float[] Pmodel0 = getPoseFromMessage(value);
-                        float[] deltaLocalTransform = new float[16];
-                        android.opengl.Matrix.multiplyMM(deltaLocalTransform, 0, Plocal1, 0, Plocal0inv, 0);
-                        float[] Pmodel1 = new float[16];
-                        android.opengl.Matrix.multiplyMM(Pmodel1, 0, deltaLocalTransform, 0, Pmodel0, 0);
+                        mRoomId = value.getRoomId();
+                        Transform Plocal0 = mPoseMap.get(value.getId());
+                        Transform Plocal0inv = Plocal0.inverse();
+                        mPoseMap.remove(value.getId());
+                        Transform Plocal1 = mStateCallback.getPose();
+                        Transform Pmodel0 = getPoseFromMessage(value);
+                        Transform deltaLocalTransform = Plocal1.multiply(Plocal0inv);
+                        Transform Pmodel1 = deltaLocalTransform.multiply(Pmodel0);
 
                         ArrayList<String> nameList = new ArrayList<>();
                         ArrayList<Double> XList = new ArrayList<>();
@@ -213,21 +107,6 @@ public class IdentificationFragment extends Fragment {
                         ArrayList<Double> SizeList = new ArrayList<>();
                         visibility(Pmodel1, nameList, XList, YList, SizeList);
                         mStateCallback.onObjectIdentified(value.getNameList(), value.getXList(), value.getYList(),value.getSizeList() , value.getWidth(), value.getHeight());
-
-//                        showToast(value.getName() + " recognized", Toast.LENGTH_SHORT);
-
-//                        mRecentObjects.addAll(value.getNameList());
-//                        if (mRecentObjects.size() > CIRCULAR_BUFFER_LENGTH) {
-//                            mRecentObjects.remove(0);
-//                        }
-//                        mTargetObject = findCommon(mRecentObjects);
-//                        if (mTargetObject == null || mTargetObject.equals("None")) {
-//                            mTargetObject = null;
-//                            mTextView.setText(getString(R.string.none));
-//                        } else {
-//                            mStateCallback.onObjectIdentified(value.getName(), value.getX(), value.getY(),value.getSize() , value.getWidth(), value.getHeight());
-//                            mTextView.setText(mTargetObject);
-//                        }
                     } catch (IllegalStateException e) {
                         //Do nothing
                         //To fix "Fragment ControlFragment{2dab555} not attached to Activity"
@@ -266,7 +145,7 @@ public class IdentificationFragment extends Fragment {
             if (time - mLastTime > REQUEST_INTERVAL) {
                 ByteString data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
                 image.close();
-                poseMap.put(time, mStateCallback.getPose());
+                mPoseMap.put(time, mStateCallback.getPose());
                 Runnable senderRunnable = new Runnable() {
                     ByteString mData;
                     int mRotateClockwiseAngle;
@@ -295,39 +174,11 @@ public class IdentificationFragment extends Fragment {
 
             }
         }
-
-
-
     };
-
-    private static String findCommon(List<String> objects) {
-        Map<String, Integer> map = new HashMap<>();
-
-        for (String obj : objects) {
-            Integer val = map.get(obj);
-            map.put(obj, val == null ? 1 : val + 1);
-        }
-
-        Map.Entry<String, Integer> max = null;
-
-        for (Map.Entry<String, Integer> e : map.entrySet()) {
-            if (max == null || e.getValue() >= max.getValue()) {
-                max = e;
-            }
-        }
-
-        return max.getKey();
-    }
-
-
 
     public static IdentificationFragment newInstance() {
         return new IdentificationFragment();
     }
-
-
-
-
 
     private void sendRequestToServer(ByteString data, int rotateClockwiseAngle, long messageId) {
         Activity activity = getActivity();
@@ -388,9 +239,6 @@ public class IdentificationFragment extends Fragment {
         }
     }
 
-
-
-
     private View mView;
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -398,9 +246,6 @@ public class IdentificationFragment extends Fragment {
         mView = inflater.inflate(R.layout.identification_fragment, container, false);
         return mView;
     }
-
-
-
 
     ImageReader mImageReader;
     @Override
@@ -425,24 +270,15 @@ public class IdentificationFragment extends Fragment {
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
 
-        // Use onSharedPreferenceChanged for reconnection if user changes BOSSWAVE router
-//        mIsBosswaveConnected = false;
-//        mBosswaveClient = null;
-//        initBosswaveClient();
-
         mTargetObject = null;
         mRecentObjects = new ArrayList<>(CIRCULAR_BUFFER_LENGTH);
 
-        Activity activity = getActivity();
-        SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
-//        preferences.registerOnSharedPreferenceChangeListener(mOnSharedPreferenceChanged);
-
-
         copyAllPreferenceValue();
 
-
-        poseMap = new HashMap<>();
-        labels = new HashMap<>();
+        mPoseMap = new HashMap<>();
+        mLabels = new HashMap<>();
+        System.out.println("mhost is --------------" + mHost);
+        System.out.println("mhost is --------------" + Integer.valueOf(mPort));
         mChannel = ManagedChannelBuilder.forAddress(mHost, Integer.valueOf(mPort)).usePlaintext(true).build();
         mRequestObserver = createNewRequestObserver();
         GrpcServiceGrpc.GrpcServiceBlockingStub stub = GrpcServiceGrpc.newBlockingStub(mChannel);
@@ -452,21 +288,26 @@ public class IdentificationFragment extends Fragment {
         for(CellmateProto.Model model : modelList) {
             List<Label> labelsInModel = new ArrayList<>();
             for(CellmateProto.Label label: model.getLabelsList()) {
-                double []position = new double[3];
-                position[0] = label.getX();
-                position[1] = label.getY();
-                position[2] = label.getZ();
+                Point3 position = new Point3(label.getX(), label.getY(), label.getZ());
                 labelsInModel.add(new Label(label.getRoomId(), position, label.getName()));
                 System.out.println(label.getName());
             }
-            labels.put(model.getId(), labelsInModel);
+            mLabels.put(model.getId(), labelsInModel);
         }
     }
 
-    @Override
-    public void onResume() {
-        super.onResume();
+    LoaderCallbackInterface mLoaderCallback = new LoaderCallbackInterface() {
+        @Override
+        public void onManagerConnected(int i) {
+            onresumeCallback();
+        }
 
+        @Override
+        public void onPackageInstall(int i, InstallCallbackInterface installCallbackInterface) {
+
+        }
+    };
+    private void onresumeCallback() {
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
         double Fx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
@@ -483,7 +324,17 @@ public class IdentificationFragment extends Fragment {
         Camera camera = Camera.getInstance();
         Log.i("CellMate","control fragment register++++");
         camera.registerPreviewSurface(mImageReader.getSurface());
+    }
 
+    @Override
+    public void onResume() {
+        super.onResume();
+
+        if (!OpenCVLoader.initDebug()) {
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_1_0, getActivity(), mLoaderCallback);
+        } else {
+            mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        }
 
 
     }
@@ -504,26 +355,6 @@ public class IdentificationFragment extends Fragment {
         super.onPause();
     }
 
-//    private void initBosswaveClient() {
-//        // Use onSharedPreferenceChanged for reconnection if user changes BOSSWAVE router
-//        if (!mIsBosswaveConnected && mBosswaveClient == null) {
-//            SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(getActivity());
-//            String bosswaveRouterAddr = preferences.getString(getString(R.string.bosswave_router_addr_key), getString(R.string.bosswave_router_addr_val));
-//            int bosswaveRouterPort = Integer.parseInt(preferences.getString(getString(R.string.bosswave_router_port_key), getString(R.string.bosswave_router_port_val)));
-//            try {
-//                String bosswaveKey = preferences.getString(getString(R.string.bosswave_key_base64_key), getString(R.string.bosswave_key_base64_val));
-//                final byte[] mKey = Base64.decode(bosswaveKey, Base64.DEFAULT);
-//                File tempKeyFile = File.createTempFile("key", null, null);
-//                tempKeyFile.deleteOnExit();
-//                FileOutputStream fos = new FileOutputStream(tempKeyFile);
-//                fos.write(mKey);
-//                fos.close();
-//                new BwInitTask(tempKeyFile, mBwInitTaskListener, bosswaveRouterAddr, bosswaveRouterPort).executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
-//            } catch (IOException e) {
-//                e.printStackTrace();
-//            }
-//        }
-//    }
     /**
      * Shows a Toast on the UI thread.
      *
@@ -541,41 +372,23 @@ public class IdentificationFragment extends Fragment {
         }
     }
 
-
-
-//    /**
-//     * Enables or disables click events for all buttons.
-//     *
-//     * @param on  true to make the On button clickable, false otherwise
-//     * @param off true to make the Off button clickable, false otherwise
-//     */
-//    private void setButtonsEnabled(final boolean on, final boolean off) {
-//        final Activity activity = getActivity();
-//        if (activity != null) {
-//            activity.runOnUiThread(() -> {
-//                mOnButton.setEnabled(on);
-//                mOffButton.setEnabled(off);
-//            });
-//        }
-//    }
-
-    Map<Integer, List<String>> mLabels = new HashMap<>();
-
-
-    private List<FoundItem> visibility(int dbId, CameraModel camera, Transform post) {
-        List<FoundItem> results = new LinkedList<>();
-        if (mLabels.get(dbId).isEmpty() {
-            return results;
+    private void visibility(Transform pose, List<String> nameList, List<Double> XList, List<Double>YList, List<Double>SizeList) {
+        CameraModel camera = new CameraModel("CameraModel",
+                                             Camera.getInstance().getCaptureSize(),
+                                             (float)mFx, (float)mFy,
+                                             (float)mCx, (float)mCy);
+        if (mLabels.get(mRoomId).isEmpty()) {
+            return;
         }
 
         List<Point3> points3 = new LinkedList<>();
         List<String> names = new LinkedList<>();
-        for (int i = 0; i < mLabels.size(); i++) {
-            points3.add(mLabels.get(i).getPoint3());
-            names.add(mLabels.get(i).getName());
+        for (Label label : mLabels.get(mRoomId)) {
+            points3.add(label.getPoint3());
+            names.add(label.getName());
         }
 
-        MatOfPoint2f planePoints;
+        MatOfPoint2f planePoints = new MatOfPoint2f();
 
         Mat K = camera.K();
         // change the base coordiate of the transform from the world coordinate to the
@@ -591,7 +404,7 @@ public class IdentificationFragment extends Fragment {
         R.put(3, 1, new double[]{poseInCamera.r31()});
         R.put(3, 2, new double[]{poseInCamera.r32()});
         R.put(3, 3, new double[]{poseInCamera.r33()});
-        Mat rvec(1, 3, CV_64FC1);
+        Mat rvec = new Mat(1, 3, CV_64FC1);
         Rodrigues(R, rvec);
         Mat tvec = new Mat(1, 3, CV_64FC1);
         tvec.put(1, 1, new double[]{poseInCamera.x()});
@@ -604,16 +417,16 @@ public class IdentificationFragment extends Fragment {
         projectPoints(objectPoints, rvec, tvec, K, new MatOfDouble(), planePoints);
 
         // find points in the image
-        int width = camera.getImageSize().width;
-        int height = camera.getImageSize().height;
+        int width = camera.getImageSize().getWidth();
+        int height = camera.getImageSize().getHeight();
         Point center = new Point(width / 2, height / 2);
         List<Point> points2 = planePoints.toList();
-        Map<Double, Pair<String, Point>> resultMap;
+        Map<Double, Pair<String, Point>> resultMap = new HashMap<>();
         for (int i = 0; i < points3.size(); ++i) {
             String name = names.get(i);
 
             if (isInFrontOfCamera(points3.get(i), poseInCamera)) {
-                double dist = norm(points2.get(i), center);
+                double dist = Math.sqrt(points2.get(i).dot(center));
                 resultMap.put(dist, new Pair<String, Point>(name, points2.get(i)));
             }
         }
@@ -624,11 +437,13 @@ public class IdentificationFragment extends Fragment {
         } else {
             size = width/10;
         }
-        for(Map.Entry<Double, Pair<String, Point>> entry : resultMap) {
+        for(Map.Entry<Double, Pair<String, Point>> entry : resultMap.entrySet()) {
             Pair<String, Point> result = entry.getValue();
-            results.add(new FoundItem(result.first, result.second.x, result.second.y, size , width, height));
+            nameList.add(result.first);
+            XList.add(result.second.x);
+            YList.add(result.second.y);
+            SizeList.add(size);
         }
-        return results;
     }
 
     private boolean isInFrontOfCamera(Point3 point3, Transform pose) {
@@ -636,11 +451,8 @@ public class IdentificationFragment extends Fragment {
         return z > 0;
     }
 
-
     public interface StateCallback {
         void onObjectIdentified(List<String> name, List<Double> x, List<Double> y, List<Double> size, double width, double height);
-        float[] getPose();
+        Transform getPose();
     }
-
-
 }

@@ -464,12 +464,12 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
                 SensorManager.getRotationMatrixFromVector(mRotMat, mRotVec);
 
-                if(mFirstTime < 100) {
-                    Log.d("log", mRotMat[0] + " " + mRotMat[1] + " " + mRotMat[2] + "\n"
-                            +mRotMat[3] + " " + mRotMat[4] + " " + mRotMat[5] + "\n"
-                            +mRotMat[6] + " " + mRotMat[7] + " " + mRotMat[8] + "\n");
-                    mFirstTime += 1;
-                }
+//                if(mFirstTime < 100) {
+//                    Log.d("log", mRotMat[0] + " " + mRotMat[1] + " " + mRotMat[2] + "\n"
+//                            +mRotMat[3] + " " + mRotMat[4] + " " + mRotMat[5] + "\n"
+//                            +mRotMat[6] + " " + mRotMat[7] + " " + mRotMat[8] + "\n");
+//                    mFirstTime += 1;
+//                }
 
             }
         }
@@ -538,7 +538,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         for(int j = oldStancePhaseEnd; j < newStancePhasesStart; j++) {
             float movingCurrentTime = timeInterval(dts, oldStancePhaseEnd, j);
             float downValue = residualValue * (movingCurrentTime/movingTotalTime);
-            System.out.println(downValue);
+//            System.out.println(downValue);
             velsCorrected.add(vels.get(j) - downValue);
             prePosition = prePosition + velsCorrected.get(j-1) * dts.get(j) + (velsCorrected.get(j) - velsCorrected.get(j-1)) * dts.get(j) / 2;
             positions.add(prePosition);
@@ -638,32 +638,9 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         }
     }
 
-    //m[offset +  0] m[offset +  4] m[offset +  8] m[offset + 12]
-    //m[offset +  1] m[offset +  5] m[offset +  9] m[offset + 13]
-    //m[offset +  2] m[offset +  6] m[offset + 10] m[offset + 14]
-    //m[offset +  3] m[offset +  7] m[offset + 11] m[offset + 15]
-    //mRotMat[0]  mRotMat[1]  mRotMat[2]  mPositionX
-    //mRotMat[3]  mRotMat[4]  mRotMat[5]  mPositionY
-    //mRotMat[6]  mRotMat[7]  mRotMat[8]  mPositionZ
-    //0           0           0           1
-    public float[] getPose() {
-        float[] pose = new float[16];
-        pose[0] = mRotMat[0];
-        pose[1] = mRotMat[3];
-        pose[2] = mRotMat[6];
-        pose[3] = 0;
-        pose[4] = mRotMat[1];
-        pose[5] = mRotMat[4];
-        pose[6] = mRotMat[7];
-        pose[7] = 0;
-        pose[8] = mRotMat[2];
-        pose[9] = mRotMat[5];
-        pose[10] = mRotMat[8];
-        pose[11] = 0;
-        pose[12] = mPositionX;
-        pose[13] = mPositionY;
-        pose[14] = mPositionZ;
-        pose[15] = 1;
-        return pose;
+    public Transform getPose() {
+        return new Transform(mRotMat[0],  mRotMat[1],  mRotMat[2],  mPositionX,
+                             mRotMat[3],  mRotMat[4],  mRotMat[5],  mPositionY,
+                             mRotMat[6],  mRotMat[7],  mRotMat[8],  mPositionZ);
     }
 }
