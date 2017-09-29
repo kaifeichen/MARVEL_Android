@@ -28,6 +28,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.Pair;
 import android.util.Size;
 import android.view.LayoutInflater;
 import android.view.Menu;
@@ -49,6 +50,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -58,6 +60,17 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
 
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfDouble;
+import org.opencv.core.MatOfPoint3f;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point3;
+import org.opencv.core.Point;
+
+import static org.opencv.calib3d.Calib3d.Rodrigues;
+import static org.opencv.core.Core.norm;
+import static org.opencv.core.CvType.CV_64FC1;
+import static org.opencv.calib3d.Calib3d.projectPoints;
 
 public class IdentificationFragment extends Fragment {
     private Handler mHandler;
@@ -519,9 +532,81 @@ public class IdentificationFragment extends Fragment {
 //        }
 //    }
 
+    Map<Integer, List<String>> mLabels = new HashMap<>();
 
-    private void visibility(float[] pose, List<String> name, List<Double> x, List<Double> y, List<Double> size) {
 
+    private List<FoundItem> visibility(int dbId, CameraModel camera, Transform post) {
+        List<FoundItem> results = new LinkedList<>();
+        if (mLabels.get(dbId).isEmpty() {
+            return results;
+        }
+
+        List<Point3> points3 = new LinkedList<>();
+        List<String> names = new LinkedList<>();
+        for (int i = 0; i < mLabels.size(); i++) {
+            points3.add(mLabels.get(i).getPoint3());
+            names.add(mLabels.get(i).getName());
+        }
+
+        MatOfPoint2f planePoints;
+
+        Mat K = camera.K();
+        // change the base coordiate of the transform from the world coordinate to the
+        // image coordinate
+        Transform poseInCamera = pose.inverse();
+        Mat R = new Mat(3, 3, CV_64FC1);
+        R.put(1, 1, new double[]{poseInCamera.r11()});
+        R.put(1, 2, new double[]{poseInCamera.r12()});
+        R.put(1, 3, new double[]{poseInCamera.r13()});
+        R.put(2, 1, new double[]{poseInCamera.r21()});
+        R.put(2, 2, new double[]{poseInCamera.r22()});
+        R.put(2, 3, new double[]{poseInCamera.r23()});
+        R.put(3, 1, new double[]{poseInCamera.r31()});
+        R.put(3, 2, new double[]{poseInCamera.r32()});
+        R.put(3, 3, new double[]{poseInCamera.r33()});
+        Mat rvec(1, 3, CV_64FC1);
+        Rodrigues(R, rvec);
+        Mat tvec = new Mat(1, 3, CV_64FC1);
+        tvec.put(1, 1, new double[]{poseInCamera.x()});
+        tvec.put(1, 1, new double[]{poseInCamera.y()});
+        tvec.put(1, 1, new double[]{poseInCamera.z()});
+
+        // do the projection
+        MatOfPoint3f objectPoints = new MatOfPoint3f();
+        objectPoints.fromList(points3);
+        projectPoints(objectPoints, rvec, tvec, K, new MatOfDouble(), planePoints);
+
+        // find points in the image
+        int width = camera.getImageSize().width;
+        int height = camera.getImageSize().height;
+        Point center = new Point(width / 2, height / 2);
+        List<Point> points2 = planePoints.toList();
+        Map<Double, Pair<String, Point>> resultMap;
+        for (int i = 0; i < points3.size(); ++i) {
+            String name = names.get(i);
+
+            if (isInFrontOfCamera(points3.get(i), poseInCamera)) {
+                double dist = norm(points2.get(i), center);
+                resultMap.put(dist, new Pair<String, Point>(name, points2.get(i)));
+            }
+        }
+
+        double size;
+        if(width>height) {
+            size = height/10;
+        } else {
+            size = width/10;
+        }
+        for(Map.Entry<Double, Pair<String, Point>> entry : resultMap) {
+            Pair<String, Point> result = entry.getValue();
+            results.add(new FoundItem(result.first, result.second.x, result.second.y, size , width, height));
+        }
+        return results;
+    }
+
+    private boolean isInFrontOfCamera(Point3 point3, Transform pose) {
+        double z = pose.r31() * point3.x + pose.r32() * point3.y + pose.r33() * point3.z + pose.z();
+        return z > 0;
     }
 
     public interface StateCallback {
