@@ -73,5 +73,5 @@ dependencies {
     compile "io.grpc:grpc-protobuf-lite:${grpcVersion}" // CURRENT_GRPC_VERSION
     compile "io.grpc:grpc-stub:${grpcVersion}" // CURRENT_GRPC_VERSION
     compile 'javax.annotation:javax.annotation-api:1.2'
-    compile 'com.github.ctodobom:OpenCV-3.1.0-Android:-SNAPSHOT'
+    compile 'com.github.davidmigloz:opencv-android-gradle-repo:3.2.0'
 }
