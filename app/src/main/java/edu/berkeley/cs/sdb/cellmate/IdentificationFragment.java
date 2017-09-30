@@ -410,21 +410,7 @@ public class IdentificationFragment extends Fragment {
         Rodrigues(R, rvec);
         Mat tvec = new Mat(1, 3, CV_64FC1);
         tvec.put(0, 0, new double[]{poseInCamera.x(),poseInCamera.y(),poseInCamera.z()});
-        if(!(rvec.total() * rvec.channels() == 3 && (rvec.depth() == CV_32F || rvec.depth() == CV_64F))) {
-            throw new IllegalStateException("aaaaaaa");
-        }
 
-        if(!(tvec.total() * tvec.channels() == 3 && (tvec.depth() == CV_32F || tvec.depth() == CV_64F))) {
-            throw new IllegalStateException("aaaaaaa");
-        }
-
-        System.out.println(tvec.width());
-        System.out.println(tvec.height());
-        System.out.println(rvec.width());
-        System.out.println(rvec.height());
-
-        System.out.println(rvec);
-        System.out.println(tvec);
         // do the projection
         MatOfPoint3f objectPoints = new MatOfPoint3f();
         objectPoints.fromList(points3);
