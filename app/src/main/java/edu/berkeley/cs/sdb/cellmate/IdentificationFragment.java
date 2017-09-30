@@ -43,6 +43,8 @@ import org.opencv.core.Point;
 
 import static org.opencv.calib3d.Calib3d.Rodrigues;
 import static org.opencv.core.Core.norm;
+import static org.opencv.core.CvType.CV_32F;
+import static org.opencv.core.CvType.CV_64F;
 import static org.opencv.core.CvType.CV_64FC1;
 import static org.opencv.calib3d.Calib3d.projectPoints;
 
@@ -395,22 +397,34 @@ public class IdentificationFragment extends Fragment {
         // image coordinate
         Transform poseInCamera = pose.inverse();
         Mat R = new Mat(3, 3, CV_64FC1);
-        R.put(1, 1, new double[]{poseInCamera.r11()});
-        R.put(1, 2, new double[]{poseInCamera.r12()});
-        R.put(1, 3, new double[]{poseInCamera.r13()});
-        R.put(2, 1, new double[]{poseInCamera.r21()});
-        R.put(2, 2, new double[]{poseInCamera.r22()});
-        R.put(2, 3, new double[]{poseInCamera.r23()});
-        R.put(3, 1, new double[]{poseInCamera.r31()});
-        R.put(3, 2, new double[]{poseInCamera.r32()});
-        R.put(3, 3, new double[]{poseInCamera.r33()});
+        R.put(0, 0, new double[]{poseInCamera.r11()});
+        R.put(0, 1, new double[]{poseInCamera.r12()});
+        R.put(0, 2, new double[]{poseInCamera.r13()});
+        R.put(1, 0, new double[]{poseInCamera.r21()});
+        R.put(1, 1, new double[]{poseInCamera.r22()});
+        R.put(1, 2, new double[]{poseInCamera.r23()});
+        R.put(2, 0, new double[]{poseInCamera.r31()});
+        R.put(2, 1, new double[]{poseInCamera.r32()});
+        R.put(2, 2, new double[]{poseInCamera.r33()});
         Mat rvec = new Mat(1, 3, CV_64FC1);
         Rodrigues(R, rvec);
         Mat tvec = new Mat(1, 3, CV_64FC1);
-        tvec.put(1, 1, new double[]{poseInCamera.x()});
-        tvec.put(1, 1, new double[]{poseInCamera.y()});
-        tvec.put(1, 1, new double[]{poseInCamera.z()});
+        tvec.put(0, 0, new double[]{poseInCamera.x(),poseInCamera.y(),poseInCamera.z()});
+        if(!(rvec.total() * rvec.channels() == 3 && (rvec.depth() == CV_32F || rvec.depth() == CV_64F))) {
+            throw new IllegalStateException("aaaaaaa");
+        }
 
+        if(!(tvec.total() * tvec.channels() == 3 && (tvec.depth() == CV_32F || tvec.depth() == CV_64F))) {
+            throw new IllegalStateException("aaaaaaa");
+        }
+
+        System.out.println(tvec.width());
+        System.out.println(tvec.height());
+        System.out.println(rvec.width());
+        System.out.println(rvec.height());
+
+        System.out.println(rvec);
+        System.out.println(tvec);
         // do the projection
         MatOfPoint3f objectPoints = new MatOfPoint3f();
         objectPoints.fromList(points3);
