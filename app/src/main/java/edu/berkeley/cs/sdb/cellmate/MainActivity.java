@@ -46,6 +46,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     private static final String MINT_API_KEY = "76da1102";
 
     private static final int REQUEST_CAMERA_PERMISSION = 1;
+    private static final int REQUEST_External_PERMISSION = 2;
+
 
     public enum PermissionState {
         NOT_GRANTED,
@@ -85,6 +87,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             } else {
                 this.finish();
             }
+        } else if (requestCode == REQUEST_External_PERMISSION) {
+
         } else {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         }
@@ -245,11 +249,17 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             Log.i("MainActivity", "onCreate askPermission");
             mPermissionState = PermissionState.NOT_GRANTED;
             requestCameraPermission();
+        } else if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                    this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                    REQUEST_External_PERMISSION);
         } else {
             Log.i("MainActivity", "onCreate not askPermission");
             mPermissionState = PermissionState.GRANTED;
             createDefaultFragments(savedInstanceState);
         }
+
 
 
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);

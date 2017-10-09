@@ -3,13 +3,18 @@ package edu.berkeley.cs.sdb.cellmate;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
+import android.content.ContextWrapper;
 import android.content.SharedPreferences;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.preference.PreferenceManager;
+import android.provider.MediaStore;
 import android.util.Log;
 import android.util.Pair;
 import android.util.Size;
@@ -21,6 +26,10 @@ import android.widget.Toast;
 
 import com.google.protobuf.ByteString;
 
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -86,6 +95,11 @@ public class IdentificationFragment extends Fragment {
                              value.getR31(), value.getR32(), value.getR33(), value.getTz());
     }
     private List<String> mRecentObjects;
+
+
+
+    private List<String> mDescriptions = new ArrayList<>();
+
     StreamObserver<CellmateProto.ServerRespondMessage> mResponseObserver = new StreamObserver<CellmateProto.ServerRespondMessage>() {
         @Override
         public void onNext(CellmateProto.ServerRespondMessage value) {
@@ -94,6 +108,9 @@ public class IdentificationFragment extends Fragment {
             if (activity != null) {
                 activity.runOnUiThread(() -> {
                     try {
+
+                        byte [] data = mLatestImageData;
+                        Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
                         mRoomId = value.getRoomId();
                         Transform Plocal0 = mPoseMap.get(value.getId());
                         Transform Plocal0inv = Plocal0.inverse();
@@ -103,11 +120,53 @@ public class IdentificationFragment extends Fragment {
                         Transform deltaLocalTransform = Plocal1.multiply(Plocal0inv);
                         Transform Pmodel1 = deltaLocalTransform.multiply(Pmodel0);
 
+                        ArrayList<String> nameListOld = new ArrayList<>();
+                        ArrayList<Double> XListOld = new ArrayList<>();
+                        ArrayList<Double> YListOld = new ArrayList<>();
+                        ArrayList<Double> SizeListOld = new ArrayList<>();
+                        visibility(Pmodel0, nameListOld, XListOld, YListOld, SizeListOld);
+
                         ArrayList<String> nameList = new ArrayList<>();
                         ArrayList<Double> XList = new ArrayList<>();
                         ArrayList<Double> YList = new ArrayList<>();
                         ArrayList<Double> SizeList = new ArrayList<>();
                         visibility(Pmodel1, nameList, XList, YList, SizeList);
+
+                        String description = "";
+                        String title =  String.valueOf(value.getId());
+                        description += "id:" + title + "\n";
+                        description += "Old: \n";
+                        for(int i = 0; i < nameListOld.size(); i++) {
+                            description += nameListOld.get(i) + " " + XListOld.get(i) + " " + YListOld.get(i) + " ";
+                        }
+                        description += "\n";
+                        description += "New: \n";
+                        for(int i = 0; i < nameList.size(); i++) {
+                            description += nameList.get(i) + " " + XList.get(i) + " " + YList.get(i) + " ";
+                        }
+                        description += "\n";
+
+                        mDescriptions.add(description);
+
+                        FileOutputStream fos = null;
+
+                        File myPath = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "/imu/"+title+".jpg");
+
+                        try {
+                            fos = new FileOutputStream(myPath);
+                            // Use the compress method on the BitMap object to write image to the OutputStream
+                            bitmapImage.compress(Bitmap.CompressFormat.JPEG, 100, fos);
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        } finally {
+                            try {
+                                fos.close();
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+                        }
+//                        MediaStore.Images.Media.insertImage(getActivity().getContentResolver(), bitmapImage, title , "");
+
                         mStateCallback.onObjectIdentified(value.getNameList(), value.getXList(), value.getYList(),value.getSizeList() , value.getWidth(), value.getHeight());
                     } catch (IllegalStateException e) {
                         //Do nothing
@@ -139,14 +198,25 @@ public class IdentificationFragment extends Fragment {
     };
 
 
+    private byte[] mLatestImageData;
+
 
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
         if(mAttached) {
+            System.out.println("ImageReader.OnImageAvailableListener");
             Long time = System.currentTimeMillis();
             Image image = reader.acquireLatestImage();
+            ByteString data;
+            if(image == null) {
+                return;
+            }
+
+            data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
+            image.close();
+            mLatestImageData = new byte[data.size()];
+            data.copyTo(mLatestImageData, 0);
+
             if (time - mLastTime > REQUEST_INTERVAL) {
-                ByteString data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
-                image.close();
                 mPoseMap.put(time, mStateCallback.getPose());
                 Runnable senderRunnable = new Runnable() {
                     ByteString mData;
@@ -266,6 +336,7 @@ public class IdentificationFragment extends Fragment {
         mImageReader.setOnImageAvailableListener(
                 mOnImageAvailableListener, null);
         mHandler = new Handler();
+
     }
 
     @Override
@@ -279,23 +350,27 @@ public class IdentificationFragment extends Fragment {
 
         mPoseMap = new HashMap<>();
         mLabels = new HashMap<>();
-        System.out.println("mhost is --------------" + mHost);
-        System.out.println("mhost is --------------" + Integer.valueOf(mPort));
-        mChannel = ManagedChannelBuilder.forAddress(mHost, Integer.valueOf(mPort)).usePlaintext(true).build();
-        mRequestObserver = createNewRequestObserver();
-        GrpcServiceGrpc.GrpcServiceBlockingStub stub = GrpcServiceGrpc.newBlockingStub(mChannel);
-        CellmateProto.Empty message = CellmateProto.Empty.newBuilder().build();
-        CellmateProto.Models models = stub.getModels(message);
-        List<CellmateProto.Model> modelList = models.getModelsList();
-        for(CellmateProto.Model model : modelList) {
-            List<Label> labelsInModel = new ArrayList<>();
-            for(CellmateProto.Label label: model.getLabelsList()) {
-                Point3 position = new Point3(label.getX(), label.getY(), label.getZ());
-                labelsInModel.add(new Label(label.getRoomId(), position, label.getName()));
-                System.out.println(label.getName());
+
+        try {
+            mChannel = ManagedChannelBuilder.forAddress(mHost, Integer.valueOf(mPort)).usePlaintext(true).build();
+            mRequestObserver = createNewRequestObserver();
+            GrpcServiceGrpc.GrpcServiceBlockingStub stub = GrpcServiceGrpc.newBlockingStub(mChannel);
+            CellmateProto.Empty message = CellmateProto.Empty.newBuilder().build();
+            CellmateProto.Models models = stub.getModels(message);
+            List<CellmateProto.Model> modelList = models.getModelsList();
+            for(CellmateProto.Model model : modelList) {
+                List<Label> labelsInModel = new ArrayList<>();
+                for(CellmateProto.Label label: model.getLabelsList()) {
+                    Point3 position = new Point3(label.getX(), label.getY(), label.getZ());
+                    labelsInModel.add(new Label(label.getRoomId(), position, label.getName()));
+                    System.out.println(label.getName());
+                }
+                mLabels.put(model.getId(), labelsInModel);
             }
-            mLabels.put(model.getId(), labelsInModel);
+        } catch (RuntimeException e) {
+
         }
+
     }
 
     LoaderCallbackInterface mLoaderCallback = new LoaderCallbackInterface() {
@@ -353,6 +428,24 @@ public class IdentificationFragment extends Fragment {
         Log.i("CellMate","control fragment unregister");
         camera.unregisterPreviewSurface(mImageReader.getSurface());
 
+
+        FileOutputStream logStream;
+
+        File logFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "/imu/pos.txt");
+        logFile.getParentFile().mkdirs();
+        try {
+            logFile.createNewFile();
+            boolean append = true;
+            logStream = new FileOutputStream(logFile, append);
+
+            for (int i = 0; i < mDescriptions.size(); i++) {
+                logStream.write(mDescriptions.get(i).getBytes());
+            }
+            logStream.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
+        }
         mHandler.removeCallbacksAndMessages(null);
         super.onPause();
     }
