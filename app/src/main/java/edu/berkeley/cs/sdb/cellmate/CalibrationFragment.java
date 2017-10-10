@@ -11,7 +11,6 @@ import android.graphics.ImageFormat;
 import android.media.Image;
 import android.media.ImageReader;
 import android.os.AsyncTask;
-import android.os.Build;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
@@ -32,7 +31,7 @@ import java.util.ArrayList;
 import java.util.List;
 import android.provider.Settings.Secure;
 
-
+import edu.berkeley.cs.sdb.cellmate.task.GrpcSendTask;
 
 
 public class CalibrationFragment extends Fragment {

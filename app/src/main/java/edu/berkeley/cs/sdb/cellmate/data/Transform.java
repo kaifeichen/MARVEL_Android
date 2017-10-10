@@ -1,4 +1,4 @@
-package edu.berkeley.cs.sdb.cellmate;
+package edu.berkeley.cs.sdb.cellmate.data;
 
 import android.opengl.Matrix;
 

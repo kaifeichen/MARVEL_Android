@@ -1,4 +1,4 @@
-package edu.berkeley.cs.sdb.cellmate;
+package edu.berkeley.cs.sdb.cellmate.task;
 
 /**
  * Created by tongli on 6/28/17.
@@ -10,6 +10,8 @@ package edu.berkeley.cs.sdb.cellmate;
 
 import android.os.AsyncTask;
 
+import edu.berkeley.cs.sdb.cellmate.CalibrationProto;
+import edu.berkeley.cs.sdb.cellmate.CalibrationServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 
