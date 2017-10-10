@@ -11,7 +11,6 @@ import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
-import android.os.Handler;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
@@ -27,6 +26,7 @@ import com.splunk.mint.Mint;
 import java.util.ArrayList;
 import java.util.List;
 
+import edu.berkeley.cs.sdb.cellmate.algo.Localizer.Localizer;
 import edu.berkeley.cs.sdb.cellmate.data.Transform;
 
 import static java.lang.Math.abs;
@@ -35,113 +35,23 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     private static final String MINT_API_KEY = "76da1102";
 
     private static final int REQUEST_CAMERA_PERMISSION = 1;
-    private static final int REQUEST_External_PERMISSION = 2;
+    private static final int REQUEST_EXTERNAL_PERMISSION = 2;
     private static final String TAG_CALIBRATION_FRAGMENT = "CalibrationFragment";
     private static final String FRAGMENT_DIALOG = "dialog";
     //IMU section
-    private static final long NS2S = 1000000000;
-    private static final float ACC_THRESHOLD = 0.5f;
     PermissionState mPermissionState;
     Mode mMode = Mode.NULL;
-    CalibrationFragment mCalibrationFragment;
     Bundle mSavedInstanceState;
-    boolean mFirst = true;
     int mFirstTime = 0;
     private SensorManager mSensorManager;
     private Sensor mAccSensor;
     private Sensor mGyroSensor;
     private Sensor mRotationSensor;
-    private long mLinearAccTimeOld;
-    private ArrayList<Float> dtsX;
-    private ArrayList<Float> dtsY;
-    private ArrayList<Float> dtsZ;
-    private ArrayList<Float> mLinearAccsX;
-    private ArrayList<Float> mLinearAccsY;
-    private ArrayList<Float> mLinearAccsZ;
-    private long mLinearAccTime;
-    private float[] mLinearAcc;
-    private float[] mRotVec;
-    private float[] mRotMat;
-    private ArrayList<Float> mVelocitysX;
-    private ArrayList<Float> mVelocitysY;
-    private ArrayList<Float> mVelocitysZ;
-    private ArrayList<Float> mPositionsX;
-    private ArrayList<Float> mPositionsY;
-    private ArrayList<Float> mPositionsZ;
-    private float mPositionX = 0;
-    private float mPositionY = 0;
-    private float mPositionZ = 0;
-    private ArrayList<Float> mVelocitysX_cor;
-    private ArrayList<Float> mVelocitysY_cor;
-    private ArrayList<Float> mVelocitysZ_cor;
-    private Handler mHandler;
-    private Phase mPhaseX;
-    private Phase mPhaseY;
-    private Phase mPhaseZ;
-    private int zeroCountX = 0;
-    private int zeroCountY = 0;
-    private int zeroCountZ = 0;
-    private int confidentCount = 100;
-    private int first100 = 100;
-    private SensorEventListener mSensorEventListener = new SensorEventListener() {
-        @Override
-        public final void onAccuracyChanged(Sensor sensor, int accuracy) {
-            // Do something here if sensor accuracy changes.
-        }
 
-        @Override
-        public final void onSensorChanged(SensorEvent event) {
-            if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
-                //Makesure ignore first 100 readings, because we observed that first few readings is really off when the app just started
-                if (first100-- > 0) {
-                    return;
-                }
-
-                mLinearAccTimeOld = mLinearAccTime;
-                mLinearAccTime = System.nanoTime();
-
-                if (mFirst) {
-                    mFirst = false;
-                    return;
-                }
-
-                // Android reuses events, so you probably want a copy
-                System.arraycopy(event.values, 0, mLinearAcc, 0, event.values.length);
-
-                mLinearAcc = RotateVec(mRotMat, mLinearAcc);
-
-                for (int i = 0; i < mLinearAcc.length; i++) {
-                    if (abs(mLinearAcc[i]) < ACC_THRESHOLD) {
-                        mLinearAcc[i] = 0.0f;
-                    }
-                }
-
-                float dt = (float) (mLinearAccTime - mLinearAccTimeOld) / NS2S;
-
-                updateXDirection(dt);
-                updateYDirection(dt);
-                updateZDirection(dt);
-            } else if (event.sensor.getType() == Sensor.TYPE_GAME_ROTATION_VECTOR) {
-                // Android reuses events, so you probably want a copy
-                System.arraycopy(event.values, 0, mRotVec, 0, event.values.length);
-
-                SensorManager.getRotationMatrixFromVector(mRotMat, mRotVec);
-
-//                if(mFirstTime < 100) {
-//                    Log.d("log", mRotMat[0] + " " + mRotMat[1] + " " + mRotMat[2] + "\n"
-//                            +mRotMat[3] + " " + mRotMat[4] + " " + mRotMat[5] + "\n"
-//                            +mRotMat[6] + " " + mRotMat[7] + " " + mRotMat[8] + "\n");
-//                    mFirstTime += 1;
-//                }
-
-            }
-        }
-    };
+    private Localizer mLocalizer;
 
     @Override
-    public void onRequestPermissionsResult(int requestCode,
-                                           String permissions[], int[] grantResults) {
-
+    public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
         if (requestCode == REQUEST_CAMERA_PERMISSION) {
             if (grantResults.length != 1 || grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.i("MainActivity", "Permission granted");
@@ -154,7 +64,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             } else {
                 this.finish();
             }
-        } else if (requestCode == REQUEST_External_PERMISSION) {
+        } else if (requestCode == REQUEST_EXTERNAL_PERMISSION) {
 
         } else {
             super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -208,52 +118,10 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             }
         }
 
-        mLinearAcc = new float[3];
+        mLocalizer.reset();
 
-        mLinearAccTimeOld = 0;
-
-        dtsX = new ArrayList<>();
-        dtsX.add(0.0f);
-        dtsY = new ArrayList<>();
-        dtsY.add(0.0f);
-        dtsZ = new ArrayList<>();
-        dtsZ.add(0.0f);
-
-        mLinearAccsX = new ArrayList<>();
-        mLinearAccsX.add(0.0f);
-        mLinearAccsY = new ArrayList<>();
-        mLinearAccsY.add(0.0f);
-        mLinearAccsZ = new ArrayList<>();
-        mLinearAccsZ.add(0.0f);
-
-        mVelocitysX = new ArrayList<>();
-        mVelocitysX.add(0.0f);
-        mVelocitysY = new ArrayList<>();
-        mVelocitysY.add(0.0f);
-        mVelocitysZ = new ArrayList<>();
-        mVelocitysZ.add(0.0f);
-
-        mVelocitysX_cor = new ArrayList<>();
-        mVelocitysY_cor = new ArrayList<>();
-        mVelocitysZ_cor = new ArrayList<>();
-
-        mPositionsX = new ArrayList<>();
-        mPositionsX.add(0.0f);
-        mPositionsY = new ArrayList<>();
-        mPositionsY.add(0.0f);
-        mPositionsZ = new ArrayList<>();
-        mPositionsZ.add(0.0f);
-
-        mRotVec = new float[4];
-        mRotMat = new float[9];
-
-        mSensorManager.registerListener(mSensorEventListener, mAccSensor, SensorManager.SENSOR_DELAY_FASTEST);
-        mSensorManager.registerListener(mSensorEventListener, mGyroSensor, SensorManager.SENSOR_DELAY_FASTEST);
-        mSensorManager.registerListener(mSensorEventListener, mRotationSensor, SensorManager.SENSOR_DELAY_FASTEST);
-
-        mPhaseX = Phase.STANCE;
-        mPhaseY = Phase.STANCE;
-        mPhaseZ = Phase.STANCE;
+        mSensorManager.registerListener(mLocalizer, mAccSensor, SensorManager.SENSOR_DELAY_FASTEST);
+        mSensorManager.registerListener(mLocalizer, mRotationSensor, SensorManager.SENSOR_DELAY_FASTEST);
     }
 
     @Override
@@ -266,7 +134,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             }
         }
 
-        mSensorManager.unregisterListener(mSensorEventListener);
+        mSensorManager.unregisterListener(mLocalizer);
 
         super.onPause();
     }
@@ -307,7 +175,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(
                     this, new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                    REQUEST_External_PERMISSION);
+                    REQUEST_EXTERNAL_PERMISSION);
         } else {
             Log.i("MainActivity", "onCreate not askPermission");
             mPermissionState = PermissionState.GRANTED;
@@ -317,8 +185,9 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
-        mGyroSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
         mRotationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);
+
+        mLocalizer = new Localizer();
     }
 
     public void createDefaultFragments(Bundle savedInstanceState) {
@@ -375,11 +244,11 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                         ft.remove(calibrationFragment);
                     }
                 }
-                CalibrationFragment calibrationFragment = new CalibrationFragment();
-                ft.replace(R.id.task_fragment, calibrationFragment);
-                IdentificationFragment identificationFragment = (IdentificationFragment) getFragmentManager().findFragmentById(R.id.identification_fragment);
-                if (identificationFragment != null) {
-                    ft.remove(identificationFragment);
+                CalibrationFragment calibFragment = new CalibrationFragment();
+                ft.replace(R.id.task_fragment, calibFragment);
+                IdentificationFragment identFragment = (IdentificationFragment) getFragmentManager().findFragmentById(R.id.identification_fragment);
+                if (identFragment != null) {
+                    ft.remove(identFragment);
                 }
                 ft.commit();
                 mMode = Mode.CALIBRATION;
@@ -389,15 +258,15 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
                 if (mMode == Mode.CONTROL) {
                     return true;
                 }
-                FragmentManager fm2 = getFragmentManager();
-                FragmentTransaction ft2 = fm2.beginTransaction();
-                IdentificationFragment identificationFragment2 = IdentificationFragment.newInstance();
-                CalibrationFragment calibrationFragment2 = (CalibrationFragment) getFragmentManager().findFragmentById(R.id.task_fragment);
-                if (calibrationFragment2 != null) {
-                    ft2.remove(calibrationFragment2);
+                FragmentManager fm = getFragmentManager();
+                FragmentTransaction ft = fm.beginTransaction();
+                IdentificationFragment identFragment = IdentificationFragment.newInstance();
+                CalibrationFragment calibFragment = (CalibrationFragment) getFragmentManager().findFragmentById(R.id.task_fragment);
+                if (calibFragment != null) {
+                    ft.remove(calibFragment);
                 }
-                ft2.replace(R.id.identification_fragment, identificationFragment2, TAG_CALIBRATION_FRAGMENT);
-                ft2.commit();
+                ft.replace(R.id.identification_fragment, identFragment, TAG_CALIBRATION_FRAGMENT);
+                ft.commit();
                 mMode = Mode.CONTROL;
                 return true;
             }
@@ -418,174 +287,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         }
     }
 
-    float timeInterval(ArrayList<Float> dts, int start, int end) {
-        float total = 0.0f;
-        for (int i = start; i <= end; i++) {
-            total += dts.get(i);
-        }
-        return total;
-    }
-
-    private float[] RotateVec(float[] rotMat, float[] vec) {
-        float[] result = new float[3];
-
-        result[0] = rotMat[0] * vec[0] + rotMat[1] * vec[1] + rotMat[2] * vec[2];
-        result[1] = rotMat[3] * vec[0] + rotMat[4] * vec[1] + rotMat[5] * vec[2];
-        result[2] = rotMat[6] * vec[0] + rotMat[7] * vec[1] + rotMat[8] * vec[2];
-
-        return result;
-    }
-
-    private int findFirstZeroAtTail(ArrayList<Float> target) {
-        if (target.get(target.size() - 1) != 0) {
-            throw new IllegalStateException("findFirstZeroAtTail input invaild");
-        }
-        for (int i = target.size() - 1; i >= 0; i--) {
-            if (target.get(i) != 0.0f) {
-                return i + 1;
-            }
-        }
-        throw new IllegalStateException("findFirstZeroAtTail input invaild: nothing found");
-    }
-
-    private int findFirstNoneZeroAtHead(ArrayList<Float> target) {
-        if (target.get(0) != 0) {
-            throw new IllegalStateException("findFirstNoneZeroAtHead input invaild");
-        }
-        for (int i = 0; i < target.size(); i++) {
-            if (target.get(i) != 0.0f) {
-                return i;
-            }
-        }
-        throw new IllegalStateException("findFirstNoneZeroAtHead input invaild: nothing found");
-    }
-
-    //Assuming the accs array is consists of {stance phase 0s, MOVING with nonozeros, 100 zeros of next stance phase or paused}
-    private void doCorrection(ArrayList<Float> accs, ArrayList<Float> vels, ArrayList<Float> velsCorrected, ArrayList<Float> positions, ArrayList<Float> dts) {
-        if (accs.size() != vels.size() || accs.size() != dts.size()) {
-            throw new IllegalStateException("doCorrection illegal state");
-        }
-
-        int newStancePhasesStart = findFirstZeroAtTail(accs);
-        int oldStancePhaseEnd = findFirstNoneZeroAtHead(accs);
-
-        float prePosition = positions.get(positions.size() - 1);
-        //update stancePhase velocity to zero
-        for (int j = 0; j < oldStancePhaseEnd; j++) {
-            velsCorrected.add(0.0f);
-            positions.add(prePosition);
-        }
-
-        //correct movingPhase velocity
-        float residualValue = vels.get(newStancePhasesStart);
-        float movingTotalTime = timeInterval(dts, oldStancePhaseEnd, newStancePhasesStart);
-        for (int j = oldStancePhaseEnd; j < newStancePhasesStart; j++) {
-            float movingCurrentTime = timeInterval(dts, oldStancePhaseEnd, j);
-            float downValue = residualValue * (movingCurrentTime / movingTotalTime);
-//            System.out.println(downValue);
-            velsCorrected.add(vels.get(j) - downValue);
-            prePosition = prePosition + velsCorrected.get(j - 1) * dts.get(j) + (velsCorrected.get(j) - velsCorrected.get(j - 1)) * dts.get(j) / 2;
-            positions.add(prePosition);
-        }
-
-
-        //newAccs should be just 100 or less of zeros
-        ArrayList<Float> newAccs = new ArrayList<Float>(accs.subList(newStancePhasesStart, accs.size()));
-        accs.clear();
-        accs.addAll(newAccs);
-        vels.clear();
-        vels.addAll(newAccs);
-        ArrayList<Float> newDts = new ArrayList<Float>(dts.subList(newStancePhasesStart, dts.size()));
-        dts.clear();
-        dts.addAll(newDts);
-        velsCorrected.clear();
-    }
-
-    private void updateXDirection(float dt) {
-        dtsX.add(dt);
-        float preVel = mVelocitysX.get(mVelocitysX.size() - 1);
-        float preAcc = mLinearAccsX.get(mLinearAccsX.size() - 1);
-        float curVel = preVel + preAcc * dt + (mLinearAcc[0] - preVel) * dt / 2;
-        mLinearAccsX.add(mLinearAcc[0]);
-        mVelocitysX.add(curVel);
-        mPositionX = mPositionX + preVel * dt + (curVel - preVel) * dt / 2;
-        if (mPhaseX == Phase.STANCE) {
-            if (mLinearAcc[0] != 0.0f) {
-                mPhaseX = Phase.MOVING;
-            }
-        } else if (mPhaseX == Phase.MOVING) {
-            if (mLinearAcc[0] == 0.0f) {
-                zeroCountX += 1;
-                if (zeroCountX >= confidentCount) {
-                    zeroCountX = 0;
-                    mPhaseX = Phase.STANCE;
-                    doCorrection(mLinearAccsX, mVelocitysX, mVelocitysX_cor, mPositionsX, dtsX);
-                    mPositionX = mPositionsX.get(mPositionsX.size() - 1);
-                }
-            }
-        } else {
-            throw new IllegalStateException("onSensorChanged in illegal State");
-        }
-    }
-
-    private void updateYDirection(float dt) {
-        dtsY.add(dt);
-        float preVel = mVelocitysY.get(mVelocitysY.size() - 1);
-        float preAcc = mLinearAccsY.get(mLinearAccsY.size() - 1);
-        float curVel = preVel + preAcc * dt + (mLinearAcc[1] - preVel) * dt / 2;
-        mLinearAccsY.add(mLinearAcc[1]);
-        mVelocitysY.add(curVel);
-        mPositionY = mPositionY + preVel * dt + (curVel - preVel) * dt / 2;
-        if (mPhaseY == Phase.STANCE) {
-            if (mLinearAcc[1] != 0.0f) {
-                mPhaseY = Phase.MOVING;
-            }
-        } else if (mPhaseY == Phase.MOVING) {
-            if (mLinearAcc[1] == 0.0f) {
-                zeroCountY += 1;
-                if (zeroCountY >= confidentCount) {
-                    zeroCountY = 0;
-                    mPhaseY = Phase.STANCE;
-                    doCorrection(mLinearAccsY, mVelocitysY, mVelocitysY_cor, mPositionsY, dtsY);
-                    mPositionY = mPositionsY.get(mPositionsY.size() - 1);
-                }
-            }
-        } else {
-            throw new IllegalStateException("onSensorChanged in illegal State");
-        }
-    }
-
-    private void updateZDirection(float dt) {
-        dtsZ.add(dt);
-        float preVel = mVelocitysZ.get(mVelocitysZ.size() - 1);
-        float preAcc = mLinearAccsZ.get(mLinearAccsZ.size() - 1);
-        float curVel = preVel + preAcc * dt + (mLinearAcc[2] - preVel) * dt / 2;
-        mLinearAccsZ.add(mLinearAcc[2]);
-        mVelocitysZ.add(curVel);
-        mPositionZ = mPositionZ + preVel * dt + (curVel - preVel) * dt / 2;
-        if (mPhaseZ == Phase.STANCE) {
-            if (mLinearAcc[2] != 0.0f) {
-                mPhaseZ = Phase.MOVING;
-            }
-        } else if (mPhaseZ == Phase.MOVING) {
-            if (mLinearAcc[2] == 0.0f) {
-                zeroCountZ += 1;
-                if (zeroCountZ >= confidentCount) {
-                    zeroCountZ = 0;
-                    mPhaseZ = Phase.STANCE;
-                    doCorrection(mLinearAccsZ, mVelocitysZ, mVelocitysZ_cor, mPositionsZ, dtsZ);
-                    mPositionZ = mPositionsZ.get(mPositionsZ.size() - 1);
-                }
-            }
-        } else {
-            throw new IllegalStateException("onSensorChanged in illegal State");
-        }
-    }
-
     public Transform getPose() {
-        return new Transform(mRotMat[0], mRotMat[1], mRotMat[2], mPositionX,
-                mRotMat[3], mRotMat[4], mRotMat[5], mPositionY,
-                mRotMat[6], mRotMat[7], mRotMat[8], mPositionZ);
+        return mLocalizer.getPose();
     }
 
     public enum PermissionState {
@@ -600,8 +303,4 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         PREVIEW
     }
 
-    enum Phase {
-        STANCE,
-        MOVING
-    }
 }
