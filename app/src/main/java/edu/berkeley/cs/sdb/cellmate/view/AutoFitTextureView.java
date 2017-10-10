@@ -1,9 +1,11 @@
-package edu.berkeley.cs.sdb.cellmate;
+package edu.berkeley.cs.sdb.cellmate.view;
 
 import android.content.Context;
 import android.util.AttributeSet;
 import android.util.Size;
 import android.view.TextureView;
+
+import edu.berkeley.cs.sdb.cellmate.Camera;
 
 /**
  * A TextureView that can be adjusted to a specified aspect ratio.

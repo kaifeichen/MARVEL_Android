@@ -26,6 +26,8 @@ import android.widget.ImageView;
 import java.util.ArrayList;
 import java.util.List;
 
+import edu.berkeley.cs.sdb.cellmate.view.AutoFitTextureView;
+
 
 public class PreviewFragment extends Fragment {
 

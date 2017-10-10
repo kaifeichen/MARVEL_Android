@@ -10,7 +10,7 @@
                 android:paddingTop="@dimen/activity_vertical_margin"
                 tools:context=".MainActivity">
 
-    <edu.berkeley.cs.sdb.cellmate.AutoFitTextureView
+    <edu.berkeley.cs.sdb.cellmate.view.AutoFitTextureView
         android:id="@+id/texture"
         android:layout_width="match_parent"
         android:layout_height="match_parent"

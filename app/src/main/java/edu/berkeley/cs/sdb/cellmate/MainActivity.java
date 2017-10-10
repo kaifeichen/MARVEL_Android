@@ -460,7 +460,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         throw new IllegalStateException("findFirstNoneZeroAtHead input invaild: nothing found");
     }
 
-    //Assuming the accs array is consists of {stance phase 0s, Moving with nonozeros, 100 zeros of next stance phase or paused}
+    //Assuming the accs array is consists of {stance phase 0s, MOVING with nonozeros, 100 zeros of next stance phase or paused}
     private void doCorrection(ArrayList<Float> accs, ArrayList<Float> vels, ArrayList<Float> velsCorrected, ArrayList<Float> positions, ArrayList<Float> dts) {
         if (accs.size() != vels.size() || accs.size() != dts.size()) {
             throw new IllegalStateException("doCorrection illegal state");
@@ -511,9 +511,9 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         mPositionX = mPositionX + preVel * dt + (curVel - preVel) * dt / 2;
         if (mPhaseX == Phase.STANCE) {
             if (mLinearAcc[0] != 0.0f) {
-                mPhaseX = Phase.Moving;
+                mPhaseX = Phase.MOVING;
             }
-        } else if (mPhaseX == Phase.Moving) {
+        } else if (mPhaseX == Phase.MOVING) {
             if (mLinearAcc[0] == 0.0f) {
                 zeroCountX += 1;
                 if (zeroCountX >= confidentCount) {
@@ -538,9 +538,9 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         mPositionY = mPositionY + preVel * dt + (curVel - preVel) * dt / 2;
         if (mPhaseY == Phase.STANCE) {
             if (mLinearAcc[1] != 0.0f) {
-                mPhaseY = Phase.Moving;
+                mPhaseY = Phase.MOVING;
             }
-        } else if (mPhaseY == Phase.Moving) {
+        } else if (mPhaseY == Phase.MOVING) {
             if (mLinearAcc[1] == 0.0f) {
                 zeroCountY += 1;
                 if (zeroCountY >= confidentCount) {
@@ -565,9 +565,9 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         mPositionZ = mPositionZ + preVel * dt + (curVel - preVel) * dt / 2;
         if (mPhaseZ == Phase.STANCE) {
             if (mLinearAcc[2] != 0.0f) {
-                mPhaseZ = Phase.Moving;
+                mPhaseZ = Phase.MOVING;
             }
-        } else if (mPhaseZ == Phase.Moving) {
+        } else if (mPhaseZ == Phase.MOVING) {
             if (mLinearAcc[2] == 0.0f) {
                 zeroCountZ += 1;
                 if (zeroCountZ >= confidentCount) {
@@ -602,6 +602,6 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     enum Phase {
         STANCE,
-        Moving
+        MOVING
     }
 }
