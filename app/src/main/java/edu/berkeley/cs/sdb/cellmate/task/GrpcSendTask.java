@@ -5,59 +5,38 @@ package edu.berkeley.cs.sdb.cellmate.task;
  */
 
 
-
-
-
 import android.os.AsyncTask;
+import android.os.Build;
+import android.util.Size;
+
+import com.google.protobuf.ByteString;
+
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import edu.berkeley.cs.sdb.cellmate.CalibrationProto;
 import edu.berkeley.cs.sdb.cellmate.CalibrationServiceGrpc;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-
-import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
-
-
-import android.media.Image;
-import android.os.Build;
-import android.os.SystemClock;
-import android.util.Size;
-
-
-import com.google.protobuf.ByteString;
-
-import java.io.PrintWriter;
-import java.io.StringWriter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Created by tongli on 6/6/17.
  */
 
-public class GrpcSendTask extends AsyncTask<Void, Void, CalibrationProto.CameraMatrix>{
-    public enum QueryType {
-        QUERY,
-        CALIBRATE
-    }
-    private ManagedChannel mChannel;
-    private String mHost;
-    private int mPort;
+public class GrpcSendTask extends AsyncTask<Void, Void, CalibrationProto.CameraMatrix> {
     List<ByteString> mImages;
-    private Listener mListener;
     CalibrationProto.CameraMatrix mResults;
     //Either "QUERY" or "CALIBRATE"
     QueryType mQueryType;
     String mDeviceId;
     Size mCaptureSize;
-    public interface Listener {
-        void onResponse(CalibrationProto.CameraMatrix results); // null means network error
-    }
-
-    public GrpcSendTask(String host, int port, List<ByteString> images, QueryType queryType , String deviceID, Size captureSize, Listener listener) {
+    private ManagedChannel mChannel;
+    private String mHost;
+    private int mPort;
+    private Listener mListener;
+    public GrpcSendTask(String host, int port, List<ByteString> images, QueryType queryType, String deviceID, Size captureSize, Listener listener) {
         mHost = host;
         mPort = port;
         mImages = images;
@@ -98,7 +77,7 @@ public class GrpcSendTask extends AsyncTask<Void, Void, CalibrationProto.CameraM
         StreamObserver<CalibrationProto.Image> requestObserver = mStub.calibrate(responseObserver);
         System.out.println("device name is " + getDeviceName());
         try {
-            if(mQueryType == QueryType.QUERY) {
+            if (mQueryType == QueryType.QUERY) {
                 CalibrationProto.Image queryMessage =
                         CalibrationProto.Image.newBuilder().
                                 setCaptureWidth(mCaptureSize.getWidth()).
@@ -113,7 +92,7 @@ public class GrpcSendTask extends AsyncTask<Void, Void, CalibrationProto.CameraM
                     // Sending further requests won't error, but they will just be thrown away.
                     return null;
                 }
-            } else if(mQueryType == QueryType.CALIBRATE) {
+            } else if (mQueryType == QueryType.CALIBRATE) {
                 for (int i = 0; i < mImages.size(); ++i) {
                     CalibrationProto.Image nextImage =
                             CalibrationProto.Image.newBuilder().
@@ -162,12 +141,21 @@ public class GrpcSendTask extends AsyncTask<Void, Void, CalibrationProto.CameraM
         mListener.onResponse(results);
     }
 
-    public  String getDeviceName() {
+    public String getDeviceName() {
         String manufacturer = Build.MANUFACTURER;
         String model = Build.MODEL;
         if (model.toLowerCase().startsWith(manufacturer.toLowerCase())) {
             return model.toUpperCase();
         }
         return manufacturer.toUpperCase() + " " + model;
+    }
+
+    public enum QueryType {
+        QUERY,
+        CALIBRATE
+    }
+
+    public interface Listener {
+        void onResponse(CalibrationProto.CameraMatrix results); // null means network error
     }
 }

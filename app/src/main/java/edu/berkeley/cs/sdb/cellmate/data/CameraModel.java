@@ -6,10 +6,6 @@ import android.util.Size;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 
-/**
- * Created by tongli on 9/28/17.
- */
-
 public class CameraModel {
     private String mName;
     private Size mImageSize;
@@ -26,7 +22,7 @@ public class CameraModel {
         this.mFy = mFy;
         this.mCx = mCx;
         this.mCy = mCy;
-        mK = new Mat(3,3, CvType.CV_32FC1);
+        mK = new Mat(3, 3, CvType.CV_32FC1);
         int row = 0, col = 0;
         mK.put(row, col, mFx, 0, mCx, 0, mFy, mCy, 0, 0, 1);
     }

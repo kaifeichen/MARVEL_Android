@@ -24,6 +24,16 @@ import android.widget.Toast;
 
 import com.google.protobuf.ByteString;
 
+import org.opencv.android.InstallCallbackInterface;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfDouble;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.MatOfPoint3f;
+import org.opencv.core.Point;
+import org.opencv.core.Point3;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -40,28 +50,14 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.stub.StreamObserver;
 
-import org.opencv.android.InstallCallbackInterface;
-import org.opencv.android.LoaderCallbackInterface;
-import org.opencv.android.OpenCVLoader;
-import org.opencv.core.Mat;
-import org.opencv.core.MatOfDouble;
-import org.opencv.core.MatOfPoint3f;
-import org.opencv.core.MatOfPoint2f;
-import org.opencv.core.Point3;
-import org.opencv.core.Point;
-
 import static org.opencv.calib3d.Calib3d.Rodrigues;
-import static org.opencv.core.Core.norm;
-import static org.opencv.core.CvType.CV_64FC1;
 import static org.opencv.calib3d.Calib3d.projectPoints;
+import static org.opencv.core.CvType.CV_64FC1;
 
 public class IdentificationFragment extends Fragment {
-    private Handler mHandler;
-    private boolean mAttached;
     private static final String LOG_TAG = "CellMate";
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
-    private int REQUEST_INTERVAL = 500;
     private final int CIRCULAR_BUFFER_LENGTH = 10;
     String mHost;
     String mPort;
@@ -69,35 +65,37 @@ public class IdentificationFragment extends Fragment {
     double mFy;
     double mCx;
     double mCy;
-    private StateCallback mStateCallback;
     ManagedChannel mChannel;
     StreamObserver<CellmateProto.ClientQueryMessage> mRequestObserver;
     TextView mTextView;
     TextView mInforText;
+    ImageReader mImageReader;
+    private Handler mHandler;
+    private boolean mAttached;
+    private int REQUEST_INTERVAL = 500;
+    LoaderCallbackInterface mLoaderCallback = new LoaderCallbackInterface() {
+        @Override
+        public void onManagerConnected(int i) {
+            onresumeCallback();
+        }
 
+        @Override
+        public void onPackageInstall(int i, InstallCallbackInterface installCallbackInterface) {
+
+        }
+    };
+    private StateCallback mStateCallback;
     //Use the time that sending the message as the id for pose
     private HashMap<Long, Transform> mPoseMap;
     private HashMap<Integer, List<Label>> mLabels;
-    private  int mRoomId;
-
-
+    private int mRoomId;
     private Long mLastTime;
     // We keep a toast reference so it can be updated instantly
     private Toast mToast;
-
     private String mTargetObject;
-
-    private Transform getPoseFromMessage(CellmateProto.ServerRespondMessage value) {
-        return new Transform(value.getR11(), value.getR12(), value.getR13(), value.getTx(),
-                             value.getR21(), value.getR22(), value.getR23(), value.getTy(),
-                             value.getR31(), value.getR32(), value.getR33(), value.getTz());
-    }
     private List<String> mRecentObjects;
-
-
-
     private List<String> mDescriptions = new ArrayList<>();
-
+    private byte[] mLatestImageData;
     StreamObserver<CellmateProto.ServerRespondMessage> mResponseObserver = new StreamObserver<CellmateProto.ServerRespondMessage>() {
         @Override
         public void onNext(CellmateProto.ServerRespondMessage value) {
@@ -107,7 +105,7 @@ public class IdentificationFragment extends Fragment {
                 activity.runOnUiThread(() -> {
                     try {
 
-                        byte [] data = mLatestImageData;
+                        byte[] data = mLatestImageData;
                         Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
                         mRoomId = value.getRoomId();
                         Transform Plocal0 = mPoseMap.get(value.getId());
@@ -131,15 +129,15 @@ public class IdentificationFragment extends Fragment {
                         visibility(Pmodel1, nameList, XList, YList, SizeList);
 
                         String description = "";
-                        String title =  String.valueOf(value.getId());
+                        String title = String.valueOf(value.getId());
                         description += "id:" + title + "\n";
                         description += "Old: \n";
-                        for(int i = 0; i < nameListOld.size(); i++) {
+                        for (int i = 0; i < nameListOld.size(); i++) {
                             description += nameListOld.get(i) + " " + XListOld.get(i) + " " + YListOld.get(i) + " ";
                         }
                         description += "\n";
                         description += "New: \n";
-                        for(int i = 0; i < nameList.size(); i++) {
+                        for (int i = 0; i < nameList.size(); i++) {
                             description += nameList.get(i) + " " + XList.get(i) + " " + YList.get(i) + " ";
                         }
                         description += "\n";
@@ -148,7 +146,7 @@ public class IdentificationFragment extends Fragment {
 
                         FileOutputStream fos = null;
 
-                        File myPath = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "/imu/"+title+".jpg");
+                        File myPath = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "/imu/" + title + ".jpg");
 
                         try {
                             fos = new FileOutputStream(myPath);
@@ -165,7 +163,7 @@ public class IdentificationFragment extends Fragment {
                         }
 //                        MediaStore.Images.Media.insertImage(getActivity().getContentResolver(), bitmapImage, title , "");
 
-                        mStateCallback.onObjectIdentified(value.getNameList(), value.getXList(), value.getYList(),value.getSizeList() , value.getWidth(), value.getHeight());
+                        mStateCallback.onObjectIdentified(value.getNameList(), value.getXList(), value.getYList(), value.getSizeList(), value.getWidth(), value.getHeight());
                     } catch (IllegalStateException e) {
                         //Do nothing
                         //To fix "Fragment ControlFragment{2dab555} not attached to Activity"
@@ -194,18 +192,13 @@ public class IdentificationFragment extends Fragment {
             showToast("Server is disconnected due to grpc complete", Toast.LENGTH_LONG);
         }
     };
-
-
-    private byte[] mLatestImageData;
-
-
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
-        if(mAttached) {
+        if (mAttached) {
             System.out.println("ImageReader.OnImageAvailableListener");
             Long time = System.currentTimeMillis();
             Image image = reader.acquireLatestImage();
             ByteString data;
-            if(image == null) {
+            if (image == null) {
                 return;
             }
 
@@ -219,9 +212,10 @@ public class IdentificationFragment extends Fragment {
                 Runnable senderRunnable = new Runnable() {
                     ByteString mData;
                     int mRotateClockwiseAngle;
+
                     @Override
                     public void run() {
-                        sendRequestToServer(mData,mRotateClockwiseAngle,time);
+                        sendRequestToServer(mData, mRotateClockwiseAngle, time);
                     }
 
                     public Runnable init(ByteString data) {
@@ -229,14 +223,14 @@ public class IdentificationFragment extends Fragment {
                         Camera camera = Camera.getInstance();
                         //Angles the data image need to rotate right to have the correct direction
                         mRotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
-                        return(this);
+                        return (this);
                     }
                 }.init(data);
                 mHandler.post(senderRunnable);
                 //sendRequestToServer(data);
                 mLastTime = time;
             } else {
-                try{
+                try {
                     image.close();
                 } catch (NullPointerException e) {
 
@@ -245,9 +239,16 @@ public class IdentificationFragment extends Fragment {
             }
         }
     };
+    private View mView;
 
     public static IdentificationFragment newInstance() {
         return new IdentificationFragment();
+    }
+
+    private Transform getPoseFromMessage(CellmateProto.ServerRespondMessage value) {
+        return new Transform(value.getR11(), value.getR12(), value.getR13(), value.getTx(),
+                value.getR21(), value.getR22(), value.getR23(), value.getTy(),
+                value.getR31(), value.getR32(), value.getR33(), value.getTz());
     }
 
     private void sendRequestToServer(ByteString data, int rotateClockwiseAngle, long messageId) {
@@ -309,7 +310,6 @@ public class IdentificationFragment extends Fragment {
         }
     }
 
-    private View mView;
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
@@ -317,7 +317,6 @@ public class IdentificationFragment extends Fragment {
         return mView;
     }
 
-    ImageReader mImageReader;
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
         mTextView = (TextView) view.findViewById(R.id.textInIdentiFrag);
@@ -329,7 +328,7 @@ public class IdentificationFragment extends Fragment {
         mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
         Camera camera = Camera.getInstance();
         Size captureSize = camera.getCaptureSize();
-        mImageReader = ImageReader.newInstance(captureSize.getWidth(),captureSize.getHeight(),
+        mImageReader = ImageReader.newInstance(captureSize.getWidth(), captureSize.getHeight(),
                 ImageFormat.JPEG, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(
                 mOnImageAvailableListener, null);
@@ -356,9 +355,9 @@ public class IdentificationFragment extends Fragment {
             CellmateProto.Empty message = CellmateProto.Empty.newBuilder().build();
             CellmateProto.Models models = stub.getModels(message);
             List<CellmateProto.Model> modelList = models.getModelsList();
-            for(CellmateProto.Model model : modelList) {
+            for (CellmateProto.Model model : modelList) {
                 List<Label> labelsInModel = new ArrayList<>();
-                for(CellmateProto.Label label: model.getLabelsList()) {
+                for (CellmateProto.Label label : model.getLabelsList()) {
                     Point3 position = new Point3(label.getX(), label.getY(), label.getZ());
                     labelsInModel.add(new Label(label.getRoomId(), position, label.getName()));
                     System.out.println(label.getName());
@@ -371,33 +370,22 @@ public class IdentificationFragment extends Fragment {
 
     }
 
-    LoaderCallbackInterface mLoaderCallback = new LoaderCallbackInterface() {
-        @Override
-        public void onManagerConnected(int i) {
-            onresumeCallback();
-        }
-
-        @Override
-        public void onPackageInstall(int i, InstallCallbackInterface installCallbackInterface) {
-
-        }
-    };
     private void onresumeCallback() {
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
         double Fx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
-        if(Fx > 0) {
+        if (Fx > 0) {
             mInforText.setVisibility(View.GONE);
         } else {
             mInforText.setText("Camera is uncalibrated, for better use of the system,\n please go to calibration mode and calibrate");
         }
         double frameRate = Double.parseDouble(preferences.getString(activity.getString(R.string.query_rate_key), activity.getString(R.string.query_rate_val)));
-        REQUEST_INTERVAL = (int)((1.0/frameRate) * 1000);
+        REQUEST_INTERVAL = (int) ((1.0 / frameRate) * 1000);
         copyAllPreferenceValue();
         mRequestObserver = createNewRequestObserver();
         mAttached = true;
         Camera camera = Camera.getInstance();
-        Log.i("CellMate","control fragment register++++");
+        Log.i("CellMate", "control fragment register++++");
         camera.registerPreviewSurface(mImageReader.getSurface());
     }
 
@@ -423,7 +411,7 @@ public class IdentificationFragment extends Fragment {
         mChannel.shutdown();
 
         Camera camera = Camera.getInstance();
-        Log.i("CellMate","control fragment unregister");
+        Log.i("CellMate", "control fragment unregister");
         camera.unregisterPreviewSurface(mImageReader.getSurface());
 
 
@@ -465,11 +453,11 @@ public class IdentificationFragment extends Fragment {
         }
     }
 
-    private void visibility(Transform pose, List<String> nameList, List<Double> XList, List<Double>YList, List<Double>SizeList) {
+    private void visibility(Transform pose, List<String> nameList, List<Double> XList, List<Double> YList, List<Double> SizeList) {
         CameraModel camera = new CameraModel("CameraModel",
-                                             Camera.getInstance().getCaptureSize(),
-                                             (float)mFx, (float)mFy,
-                                             (float)mCx, (float)mCy);
+                Camera.getInstance().getCaptureSize(),
+                (float) mFx, (float) mFy,
+                (float) mCx, (float) mCy);
         if (mLabels.get(mRoomId).isEmpty()) {
             return;
         }
@@ -500,7 +488,7 @@ public class IdentificationFragment extends Fragment {
         Mat rvec = new Mat(1, 3, CV_64FC1);
         Rodrigues(R, rvec);
         Mat tvec = new Mat(1, 3, CV_64FC1);
-        tvec.put(0, 0, new double[]{poseInCamera.x(),poseInCamera.y(),poseInCamera.z()});
+        tvec.put(0, 0, new double[]{poseInCamera.x(), poseInCamera.y(), poseInCamera.z()});
 
         // do the projection
         MatOfPoint3f objectPoints = new MatOfPoint3f();
@@ -523,12 +511,12 @@ public class IdentificationFragment extends Fragment {
         }
 
         double size;
-        if(width>height) {
-            size = height/10;
+        if (width > height) {
+            size = height / 10;
         } else {
-            size = width/10;
+            size = width / 10;
         }
-        for(Map.Entry<Double, Pair<String, Point>> entry : resultMap.entrySet()) {
+        for (Map.Entry<Double, Pair<String, Point>> entry : resultMap.entrySet()) {
             Pair<String, Point> result = entry.getValue();
             nameList.add(result.first);
             XList.add(result.second.x);
@@ -544,6 +532,7 @@ public class IdentificationFragment extends Fragment {
 
     public interface StateCallback {
         void onObjectIdentified(List<String> name, List<Double> x, List<Double> y, List<Double> size, double width, double height);
+
         Transform getPose();
     }
 }

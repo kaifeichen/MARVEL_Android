@@ -2,8 +2,6 @@ package edu.berkeley.cs.sdb.cellmate;
 
 import android.app.Activity;
 import android.app.Fragment;
-import android.app.FragmentManager;
-import android.app.FragmentTransaction;
 import android.content.Context;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
@@ -11,7 +9,6 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.Paint;
-import android.graphics.Point;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.SurfaceTexture;
@@ -24,7 +21,6 @@ import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.widget.ImageView;
 
 import java.util.ArrayList;
@@ -36,12 +32,16 @@ public class PreviewFragment extends Fragment {
 
     private static final String LOG_TAG = "CellMate";
     Bitmap mBmp;
+    Surface mTextureViewSurface;
+    ArrayList<String> mName = new ArrayList<>();
+    ArrayList<Double> mRight = new ArrayList<>();
+    ArrayList<Double> mLeft = new ArrayList<>();
+    ArrayList<Double> mBottom = new ArrayList<>();
+    ArrayList<Double> mTop = new ArrayList<>();
     private AutoFitTextureView mTextureView;
     // The android.util.Size of camera preview.
     private Size mPreviewSize;
     private Size totalSize = null;
-    private Size highlightFrameSize = null;
-    Surface mTextureViewSurface;
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
 
         @Override
@@ -59,7 +59,7 @@ public class PreviewFragment extends Fragment {
 
             mTextureViewSurface = new Surface(surfaceTexture);
 
-            Log.i("CellMate","preview fragment register++++");
+            Log.i("CellMate", "preview fragment register++++");
             camera.registerPreviewSurface(mTextureViewSurface);
 //            configureTransform(mTextureView.getWidth(), mTextureView.getHeight());
         }
@@ -73,11 +73,11 @@ public class PreviewFragment extends Fragment {
             updateSensorOrientation();
             configureTransform(width, height);
             surfaceTexture.setDefaultBufferSize(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-            if(mTextureViewSurface != null) {
+            if (mTextureViewSurface != null) {
                 camera.unregisterPreviewSurface(mTextureViewSurface);
             }
             mTextureViewSurface = new Surface(surfaceTexture);
-            Log.i("CellMate","preview fragment register++++");
+            Log.i("CellMate", "preview fragment register++++");
             camera.registerPreviewSurface(mTextureViewSurface);
         }
 
@@ -92,17 +92,15 @@ public class PreviewFragment extends Fragment {
         public void onSurfaceTextureUpdated(SurfaceTexture surfaceTexture) {
         }
     };
+    private Size highlightFrameSize = null;
     private ImageView mHighLight;
+    private StateCallback mStateCallback;
 
     public static PreviewFragment newInstance() {
         PreviewFragment previewFragment = new PreviewFragment();
 
         return previewFragment;
     }
-
-
-
-
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
@@ -120,14 +118,14 @@ public class PreviewFragment extends Fragment {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
 //                System.out.println(motionEvent.getX() + "  " + motionEvent.getY());
-                if(totalSize!=null && highlightFrameSize!=null) {
+                if (totalSize != null && highlightFrameSize != null) {
                     double x = motionEvent.getX();
                     double y = motionEvent.getY();
-                    double ratio = totalSize.getWidth() * 1.0/highlightFrameSize.getWidth();
-                    double newX = x/ratio;
-                    double newY = y/ratio;
-                    for(int i = 0; i < mName.size(); i++) {
-                        if(newX >= mLeft.get(i) && newX <= mRight.get(i) && newY>=mTop.get(i) && newY<=mBottom.get(i)) {
+                    double ratio = totalSize.getWidth() * 1.0 / highlightFrameSize.getWidth();
+                    double newX = x / ratio;
+                    double newY = y / ratio;
+                    for (int i = 0; i < mName.size(); i++) {
+                        if (newX >= mLeft.get(i) && newX <= mRight.get(i) && newY >= mTop.get(i) && newY <= mBottom.get(i)) {
                             mStateCallback.previewOnClicked(true, mName.get(i));
                             return true;
                         }
@@ -159,26 +157,23 @@ public class PreviewFragment extends Fragment {
         super.onResume();
 
         Camera camera = Camera.getInstance();
-        if(mTextureViewSurface != null) {
-            Log.i("CellMate","preview fragment register++++");
+        if (mTextureViewSurface != null) {
+            Log.i("CellMate", "preview fragment register++++");
             camera.registerPreviewSurface(mTextureViewSurface);
         }
 
     }
 
-
     @Override
     public void onPause() {
         Camera camera = Camera.getInstance();
-        Log.i("CellMate","preview fragment unregister-----");
+        Log.i("CellMate", "preview fragment unregister-----");
         camera.unregisterPreviewSurface(mTextureViewSurface);
         super.onPause();
     }
 
     /**
      * Update UI based on a sensor orientation
-     *
-     *
      */
     public void updateSensorOrientation() {
         int orientation = getResources().getConfiguration().orientation;
@@ -222,19 +217,12 @@ public class PreviewFragment extends Fragment {
         mTextureView.setTransform(matrix);
     }
 
-    ArrayList<String> mName = new ArrayList<>();
-    ArrayList<Double> mRight = new ArrayList<>();
-    ArrayList<Double> mLeft = new ArrayList<>();
-    ArrayList<Double> mBottom = new ArrayList<>();
-    ArrayList<Double> mTop = new ArrayList<>();
-
-
     public void drawHighlight(List<String> name, List<Double> x, List<Double> y, List<Double> size, double width, double height) {
         final Activity activity = getActivity();
         if (activity != null) {
             activity.runOnUiThread(() -> {
                 if (x.get(0) != -1) {
-                    highlightFrameSize = new Size((int)width, (int)height);
+                    highlightFrameSize = new Size((int) width, (int) height);
 
                     Paint paint = new Paint();
                     paint.setColor(Color.BLUE);
@@ -244,18 +232,17 @@ public class PreviewFragment extends Fragment {
                     }
 
 
-
-                    Bitmap mBmp = Bitmap.createBitmap((int)width, (int)height, Bitmap.Config.ARGB_8888);
+                    Bitmap mBmp = Bitmap.createBitmap((int) width, (int) height, Bitmap.Config.ARGB_8888);
                     Canvas canvas = new Canvas(mBmp);
                     mName.clear();
                     mRight.clear();
                     mLeft.clear();
                     mBottom.clear();
                     mTop.clear();
-                    for(int i = 0; i < name.size(); i++) {
+                    for (int i = 0; i < name.size(); i++) {
                         mName.add(name.get(i));
                         mRight.add(x.get(i) + size.get(i));
-                        mLeft.add(x.get(i)  - size.get(i));
+                        mLeft.add(x.get(i) - size.get(i));
                         mBottom.add(y.get(i) + size.get(i));
                         mTop.add(y.get(i) - size.get(i));
 
@@ -298,10 +285,7 @@ public class PreviewFragment extends Fragment {
         }
     }
 
-
-
-    private StateCallback mStateCallback;
     public interface StateCallback {
-        void previewOnClicked(boolean isTargeting,String target);
+        void previewOnClicked(boolean isTargeting, String target);
     }
 }

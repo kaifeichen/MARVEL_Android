@@ -13,10 +13,13 @@ import android.widget.TextView;
 
 public class ControlFragment extends Fragment {
 
+    String mTarget;
+    TextView mTextView;
+
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
-        if(mTarget.toLowerCase().contains("thermostat")) {
+        if (mTarget.toLowerCase().contains("thermostat")) {
             return inflater.inflate(R.layout.thermostat, container, false);
         } else {
             return inflater.inflate(R.layout.control_fragment, container, false);
@@ -31,12 +34,9 @@ public class ControlFragment extends Fragment {
         mTextView.setText(mTarget);
     }
 
-    String mTarget;
-    TextView mTextView;
-
     public void setTarget(String traget) {
         mTarget = traget;
-        if(mTextView != null) {
+        if (mTextView != null) {
             //happens when setTarget function called after the fragment is created
             mTextView.setText(mTarget);
         }

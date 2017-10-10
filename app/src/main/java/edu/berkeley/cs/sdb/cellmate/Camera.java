@@ -1,15 +1,8 @@
 package edu.berkeley.cs.sdb.cellmate;
 
 import android.Manifest;
-import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.Dialog;
-import android.app.DialogFragment;
-import android.app.Fragment;
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.pm.PackageManager;
-import android.content.res.Configuration;
 import android.graphics.ImageFormat;
 import android.graphics.Point;
 import android.graphics.SurfaceTexture;
@@ -20,26 +13,18 @@ import android.hardware.camera2.CameraDevice;
 import android.hardware.camera2.CameraManager;
 import android.hardware.camera2.CameraMetadata;
 import android.hardware.camera2.CaptureRequest;
-import android.hardware.camera2.CaptureResult;
 import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
-import android.os.Bundle;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
-import android.support.v4.app.ActivityCompat;
 import android.support.v4.content.ContextCompat;
 import android.util.Log;
 import android.util.Size;
-import android.util.SparseIntArray;
 import android.view.OrientationEventListener;
 import android.view.Surface;
 import android.view.WindowManager;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -48,42 +33,27 @@ import java.util.concurrent.TimeUnit;
 
 public class Camera {
 
-    private OrientationEventListener mOrientationEventListener;
-    private int mDeviceOrientation;
-
-
-    public enum States {
-        IDLE,
-        OPENED,
-        OPENING
-    }
-
-    States mCameraState;
-    private final Semaphore mCameraStateLock = new Semaphore(1);
-
-    private static Camera mInstance;
-    private static Context mContext;
-
-
-    Surface mCaptureSurface;
-
-
     /**
      * Max preview width that is guaranteed by Camera2 API
      */
     private static final int MAX_PREVIEW_WIDTH = 1920;
-
     /**
      * Max preview height that is guaranteed by Camera2 API
      */
     private static final int MAX_PREVIEW_HEIGHT = 1080;
-
-
-
-
     private static final String LOG_TAG = "CellMate";
+    private static Camera mInstance;
+    private static Context mContext;
+    private static Size mCaptureSize;
+    private static Size mPreviewSize;
+    private static Size mScreenSize;
+    private final Semaphore mCameraStateLock = new Semaphore(1);
     // A semaphore to prevent the app from exiting before closing the camera.
     private final Semaphore mCameraOpenCloseLock = new Semaphore(1);
+    States mCameraState;
+    Surface mCaptureSurface;
+    private OrientationEventListener mOrientationEventListener;
+    private int mDeviceOrientation;
     private List<Surface> mSurfaces;
     private List<Surface> mCaptureSurfaces;
     // ID of the current CameraDevice
@@ -98,6 +68,48 @@ public class Camera {
     private Handler mBackgroundHandler;
     // CaptureRequest.Builder for the camera preview
     private CaptureRequest.Builder mPreviewRequestBuilder;
+    private final CameraDevice.StateCallback mCameraStateCallback = new CameraDevice.StateCallback() {
+        @Override
+        public void onOpened(@NonNull CameraDevice cameraDevice) {
+            Log.i(LOG_TAG, "CameraDevice onOpened");
+            mCameraOpenCloseLock.release();
+            mCameraDevice = cameraDevice;
+            try {
+                mCameraStateLock.acquire();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            if (mCameraState != States.OPENING) throw new AssertionError("Camera State wrong");
+            mCameraState = States.OPENED;
+            mCameraStateLock.release();
+            if (!mSurfaces.isEmpty()) {
+                Log.i("Cellmate", "Update from onOpen");
+                updatePreviewSession();
+            } else {
+                Log.i("Cellmate", "Empty surfaces in Update from onOpen");
+            }
+
+        }
+
+        @Override
+        public void onDisconnected(@NonNull CameraDevice cameraDevice) {
+            Log.i(LOG_TAG, "CameraDevice onDisconnected");
+            mCameraOpenCloseLock.release();
+            mCameraDevice = null;
+            cameraDevice.close();
+            throw new RuntimeException("Camera Device onDisconnected");
+        }
+
+        @Override
+        public void onError(@NonNull CameraDevice cameraDevice, int error) {
+            Log.i(LOG_TAG, "CameraDevice onError");
+            mCameraOpenCloseLock.release();
+            mCameraDevice = null;
+            cameraDevice.close();
+            throw new RuntimeException("Camera Device onError");
+        }
+
+    };
     private CaptureRequest mPreviewRequest;
     private final CameraCaptureSession.StateCallback mSessionStateCallback = new CameraCaptureSession.StateCallback() {
         @Override
@@ -111,7 +123,7 @@ public class Camera {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-            if (mCameraState!=States.OPENED) throw new AssertionError("Camera State wrong");
+            if (mCameraState != States.OPENED) throw new AssertionError("Camera State wrong");
             mCameraStateLock.release();
             // When the session is ready, we start displaying the preview.
             mCaptureSession = session;
@@ -138,53 +150,6 @@ public class Camera {
 
     };
 
-
-
-
-
-    private final CameraDevice.StateCallback mCameraStateCallback = new CameraDevice.StateCallback() {
-        @Override
-        public void onOpened(@NonNull CameraDevice cameraDevice) {
-            Log.i(LOG_TAG, "CameraDevice onOpened");
-            mCameraOpenCloseLock.release();
-            mCameraDevice = cameraDevice;
-            try {
-                mCameraStateLock.acquire();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            if (mCameraState!=States.OPENING) throw new AssertionError("Camera State wrong");
-            mCameraState = States.OPENED;
-            mCameraStateLock.release();
-            if(!mSurfaces.isEmpty()) {
-                Log.i("Cellmate","Update from onOpen");
-                updatePreviewSession();
-            } else {
-                Log.i("Cellmate","Empty surfaces in Update from onOpen");
-            }
-
-        }
-
-        @Override
-        public void onDisconnected(@NonNull CameraDevice cameraDevice) {
-            Log.i(LOG_TAG, "CameraDevice onDisconnected");
-            mCameraOpenCloseLock.release();
-            mCameraDevice = null;
-            cameraDevice.close();
-            throw new RuntimeException("Camera Device onDisconnected");
-        }
-
-        @Override
-        public void onError(@NonNull CameraDevice cameraDevice, int error) {
-            Log.i(LOG_TAG, "CameraDevice onError");
-            mCameraOpenCloseLock.release();
-            mCameraDevice = null;
-            cameraDevice.close();
-            throw new RuntimeException("Camera Device onError");
-        }
-
-    };
-
     private Camera(Context context) {
         try {
             mCameraStateLock.acquire();
@@ -197,12 +162,10 @@ public class Camera {
         mContext = context;
         mSurfaces = new LinkedList<>();
         mCaptureSurfaces = new LinkedList<>();
-        mOrientationEventListener = new OrientationEventListener(mContext)
-        {
+        mOrientationEventListener = new OrientationEventListener(mContext) {
             @Override
-            public void onOrientationChanged(int orientation)
-            {
-                mDeviceOrientation =((orientation + 45) / 90 * 90)%360;
+            public void onOrientationChanged(int orientation) {
+                mDeviceOrientation = ((orientation + 45) / 90 * 90) % 360;
             }
         };
         mOrientationEventListener.enable();
@@ -217,15 +180,94 @@ public class Camera {
     }
 
     public static synchronized Camera getInstance() {
-        assert(mInstance != null);
+        assert (mInstance != null);
         return mInstance;
     }
 
+    private static void setPreviewAndCaptureSize() {
+        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
+        try {
+            for (String cameraId : manager.getCameraIdList()) {
+                CameraCharacteristics characteristics
+                        = manager.getCameraCharacteristics(cameraId);
 
-    public boolean isOpen(){
-        return mCameraState == States.OPENED;
+                // We don't use a front facing camera in this sample.
+                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
+                    continue;
+                }
+
+                StreamConfigurationMap map = characteristics.get(
+                        CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
+                if (map == null) {
+                    continue;
+                }
+
+
+                if (map == null) {
+                    continue;
+                }
+
+                Point displaySize = new Point();
+                ((WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealSize(displaySize);
+
+                //Use screen size as a reference of aspect ratio to target capture size and preview size
+                //When capture size and preview size aspect ratio is the same, we know that they get the same image with different resolution
+                mScreenSize = new Size(displaySize.x, displaySize.y);
+//                System.out.println("mScreenSize");
+//                System.out.println(mScreenSize);
+                //For capture, choose the smallest size but above 480 resolution
+                //Assuming there is at least a size fit the aspect ratio of the screen
+                for (Size option : map.getOutputSizes(ImageFormat.JPEG)) {
+//                    System.out.println(option);
+                    if (option.getWidth() * displaySize.x == option.getHeight() * displaySize.y
+                            && Math.min(option.getWidth(), option.getHeight()) <= 480) {
+                        if (mCaptureSize == null) {
+                            mCaptureSize = option;
+                        } else {
+                            if (mCaptureSize.getHeight() * mCaptureSize.getWidth() < option.getHeight() * option.getWidth()) {
+                                mCaptureSize = option;
+                            }
+                        }
+                    }
+                }
+//                System.out.println("mCaptureSize");
+//                System.out.println(mCaptureSize);
+
+
+                //For preview, choose the largest size but under MAX_PREVIEW_SIZE
+                //Assuming there is at least a size fit the aspect ratio of the screen
+                for (Size option : map.getOutputSizes(SurfaceTexture.class)) {
+//                    System.out.println(option);
+                    if (option.getWidth() * displaySize.x == option.getHeight() * displaySize.y
+                            && Math.min(option.getWidth(), option.getHeight()) <= MAX_PREVIEW_HEIGHT) {
+
+                        if (mPreviewSize == null) {
+                            mPreviewSize = option;
+                        } else {
+                            if (mPreviewSize.getHeight() * mPreviewSize.getWidth() < option.getHeight() * option.getWidth()) {
+                                mPreviewSize = option;
+                            }
+                        }
+
+                    }
+                }
+//                System.out.println("mpreviewSize");
+//                System.out.println(mPreviewSize);
+            }
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        } catch (NullPointerException e) {
+            // Currently an NPE is thrown when the Camera2API is used but not supported on the
+            // device this code runs.
+            e.printStackTrace();
+        }
+
     }
 
+    public boolean isOpen() {
+        return mCameraState == States.OPENED;
+    }
 
     /**
      * Register a surface where the camera will capture to
@@ -233,10 +275,10 @@ public class Camera {
      * @param surface
      */
     public void registerCaptureSurface(Surface surface) {
-        if(mBackgroundThread == null) {
+        if (mBackgroundThread == null) {
             startBackgroundThread();
         }
-        mBackgroundHandler.post(()-> {
+        mBackgroundHandler.post(() -> {
             if (!surface.isValid() || mCaptureSurfaces.contains(surface)) {
                 return;
             }
@@ -251,15 +293,14 @@ public class Camera {
      * @param surface
      */
     public void unregisterCaptureSurface(Surface surface) {
-        if(mBackgroundThread == null) {
+        if (mBackgroundThread == null) {
             startBackgroundThread();
         }
-        mBackgroundHandler.post(()-> {
+        mBackgroundHandler.post(() -> {
             mCaptureSurfaces.remove(surface);
             updatePreviewSession();
         });
     }
-
 
     /**
      * Register a surface where the camera will stream to
@@ -267,10 +308,10 @@ public class Camera {
      * @param surface
      */
     public void registerPreviewSurface(Surface surface) {
-        if(mBackgroundThread == null) {
+        if (mBackgroundThread == null) {
             startBackgroundThread();
         }
-        mBackgroundHandler.post(()-> {
+        mBackgroundHandler.post(() -> {
             if (!surface.isValid() || mSurfaces.contains(surface)) {
                 return;
             }
@@ -285,18 +326,17 @@ public class Camera {
      * @param surface
      */
     public void unregisterPreviewSurface(Surface surface) {
-        if(mBackgroundThread == null) {
+        if (mBackgroundThread == null) {
             startBackgroundThread();
         }
-        mBackgroundHandler.post(()-> {
+        mBackgroundHandler.post(() -> {
             mSurfaces.remove(surface);
             updatePreviewSession();
         });
     }
 
-
     public void openCamera() {
-        if(mBackgroundThread == null) {
+        if (mBackgroundThread == null) {
             startBackgroundThread();
         }
 
@@ -307,7 +347,7 @@ public class Camera {
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
-        if (mCameraState!=States.IDLE) throw new AssertionError("Camera State wrong");
+        if (mCameraState != States.IDLE) throw new AssertionError("Camera State wrong");
         mCameraState = States.OPENING;
         mCameraStateLock.release();
 
@@ -334,7 +374,7 @@ public class Camera {
      */
     public void closeCamera() {
         Log.i("Camera Device", "closeCamera");
-        if(mBackgroundThread != null) {
+        if (mBackgroundThread != null) {
             stopBackgroundThread();
         }
 
@@ -366,12 +406,11 @@ public class Camera {
 
     }
 
-
     /**
      * Sets up member variables related to camera.
      */
     private String selectCamera() {
-        if (mCameraState!=States.OPENING) throw new AssertionError("Camera State wrong");
+        if (mCameraState != States.OPENING) throw new AssertionError("Camera State wrong");
         CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
         try {
             for (String cameraId : manager.getCameraIdList()) {
@@ -396,7 +435,6 @@ public class Camera {
         throw new RuntimeException("Cannot find a camera to use.");
     }
 
-
     /**
      * Starts a background thread and its Handler.
      */
@@ -420,31 +458,30 @@ public class Camera {
         }
     }
 
-
-
     private void updatePreviewSession() {
-        Log.i("Cellmate","Get into update");
+        Log.i("Cellmate", "Get into update");
         //Avoid race condition because surfaces can be changed from different threads
 
-        if(mCameraState == States.OPENED) {
+        if (mCameraState == States.OPENED) {
             List<Surface> newSurfaces = new LinkedList<>();
-            for(Surface s : mSurfaces) {
-                if(s.isValid())
+            for (Surface s : mSurfaces) {
+                if (s.isValid())
                     newSurfaces.add(s);
             }
             mSurfaces = newSurfaces;
 
-            if(mSurfaces.isEmpty() && mCaptureSession != null && mCaptureSurfaces.isEmpty()) {
+            if (mSurfaces.isEmpty() && mCaptureSession != null && mCaptureSurfaces.isEmpty()) {
                 mCaptureSession.close();
             } else {
                 try {
                     // We set up a CaptureRequest.Builder with the output Surface.
                     mPreviewRequestBuilder = mCameraDevice.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-                    for(Surface s : mSurfaces) {
+                    for (Surface s : mSurfaces) {
                         if (s.isValid()) {
                             mPreviewRequestBuilder.addTarget(s);
                         }
-                    };
+                    }
+                    ;
 
 
                     List<Surface> allSurfaces = new LinkedList<>();
@@ -461,96 +498,9 @@ public class Camera {
         }
 
 
-
     }
 
-    private static Size mCaptureSize;
-    private static Size mPreviewSize;
-    private static Size mScreenSize;
-
-    private static void setPreviewAndCaptureSize() {
-        CameraManager manager = (CameraManager) mContext.getSystemService(Context.CAMERA_SERVICE);
-        try {
-            for (String cameraId : manager.getCameraIdList()) {
-                CameraCharacteristics characteristics
-                        = manager.getCameraCharacteristics(cameraId);
-
-                // We don't use a front facing camera in this sample.
-                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                if (facing != null && facing == CameraCharacteristics.LENS_FACING_FRONT) {
-                    continue;
-                }
-
-                StreamConfigurationMap map = characteristics.get(
-                        CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
-                if (map == null) {
-                    continue;
-                }
-
-
-                if (map == null) {
-                    continue;
-                }
-
-                Point displaySize = new Point();
-                ((WindowManager) mContext.getSystemService(Context.WINDOW_SERVICE)).getDefaultDisplay().getRealSize(displaySize);
-
-                //Use screen size as a reference of aspect ratio to target capture size and preview size
-                //When capture size and preview size aspect ratio is the same, we know that they get the same image with different resolution
-                mScreenSize = new Size(displaySize.x,displaySize.y);
-//                System.out.println("mScreenSize");
-//                System.out.println(mScreenSize);
-                //For capture, choose the smallest size but above 480 resolution
-                //Assuming there is at least a size fit the aspect ratio of the screen
-                for(Size option : map.getOutputSizes(ImageFormat.JPEG)) {
-//                    System.out.println(option);
-                    if(option.getWidth()*displaySize.x == option.getHeight()*displaySize.y
-                            && Math.min(option.getWidth(), option.getHeight()) <= 480) {
-                        if(mCaptureSize == null) {
-                            mCaptureSize = option;
-                        } else {
-                            if(mCaptureSize.getHeight() * mCaptureSize.getWidth() < option.getHeight() * option.getWidth()) {
-                                mCaptureSize = option;
-                            }
-                        }
-                    }
-                }
-//                System.out.println("mCaptureSize");
-//                System.out.println(mCaptureSize);
-
-
-
-                //For preview, choose the largest size but under MAX_PREVIEW_SIZE
-                //Assuming there is at least a size fit the aspect ratio of the screen
-                for(Size option : map.getOutputSizes(SurfaceTexture.class)) {
-//                    System.out.println(option);
-                    if(option.getWidth()*displaySize.x == option.getHeight()*displaySize.y
-                            && Math.min(option.getWidth(), option.getHeight()) <= MAX_PREVIEW_HEIGHT) {
-
-                        if(mPreviewSize == null) {
-                            mPreviewSize = option;
-                        } else {
-                            if(mPreviewSize.getHeight() * mPreviewSize.getWidth() < option.getHeight() * option.getWidth()) {
-                                mPreviewSize = option;
-                            }
-                        }
-
-                    }
-                }
-//                System.out.println("mpreviewSize");
-//                System.out.println(mPreviewSize);
-            }
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        } catch (NullPointerException e) {
-            // Currently an NPE is thrown when the Camera2API is used but not supported on the
-            // device this code runs.
-            e.printStackTrace();
-        }
-
-    }
-
-    public Size getScreenSize(){
+    public Size getScreenSize() {
         return mScreenSize;
     }
 
@@ -562,21 +512,16 @@ public class Camera {
         return mPreviewSize;
     }
 
-
-
-
-
-
     /**
      * Initiate a still image capture.
      */
     public void takePictureWithSurfaceRegisteredBefore(Surface surface) {
         System.out.println("in takePictureWithSurfaceRegisteredBefore");
         System.out.println("mSurfaces size is " + mSurfaces.size());
-        if(mBackgroundThread == null) {
+        if (mBackgroundThread == null) {
             startBackgroundThread();
         }
-        mBackgroundHandler.post(()-> {
+        mBackgroundHandler.post(() -> {
             mCaptureSurface = surface;
             lockFocus();
         });
@@ -595,12 +540,12 @@ public class Camera {
      */
     private void lockFocus() {
         System.out.println("lockFocus");
-            // This is how to tell the camera to lock focus.
-            mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
-                    CameraMetadata.CONTROL_AF_TRIGGER_START);
-            // Tell #mCaptureCallback to wait for the lock.
-            System.out.println("before call to capture");
-            captureStillPicture();
+        // This is how to tell the camera to lock focus.
+        mPreviewRequestBuilder.set(CaptureRequest.CONTROL_AF_TRIGGER,
+                CameraMetadata.CONTROL_AF_TRIGGER_START);
+        // Tell #mCaptureCallback to wait for the lock.
+        System.out.println("before call to capture");
+        captureStillPicture();
     }
 
     /**
@@ -620,9 +565,6 @@ public class Camera {
             e.printStackTrace();
         }
     }
-
-
-
 
     private void captureStillPicture() {
         System.out.println("captureStillPicture");
@@ -658,10 +600,15 @@ public class Camera {
         }
     }
 
-
-
     public int getDeviceOrientation() {
         return mDeviceOrientation;
+    }
+
+
+    public enum States {
+        IDLE,
+        OPENED,
+        OPENING
     }
 
 
