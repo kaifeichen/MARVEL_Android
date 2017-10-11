@@ -7,8 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.hardware.Sensor;
-import android.hardware.SensorEvent;
-import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.support.v4.app.ActivityCompat;
@@ -23,13 +21,10 @@ import android.view.View;
 
 import com.splunk.mint.Mint;
 
-import java.util.ArrayList;
 import java.util.List;
 
-import edu.berkeley.cs.sdb.cellmate.algo.Localizer.Localizer;
+import edu.berkeley.cs.sdb.cellmate.algo.Localizer.LocTracker;
 import edu.berkeley.cs.sdb.cellmate.data.Transform;
-
-import static java.lang.Math.abs;
 
 public class MainActivity extends AppCompatActivity implements ActivityCompat.OnRequestPermissionsResultCallback, IdentificationFragment.StateCallback, PreviewFragment.StateCallback {
     private static final String MINT_API_KEY = "76da1102";
@@ -48,7 +43,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     private Sensor mGyroSensor;
     private Sensor mRotationSensor;
 
-    private Localizer mLocalizer;
+    private LocTracker mLocTracker;
 
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
@@ -118,10 +113,10 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             }
         }
 
-        mLocalizer.reset();
+        mLocTracker.reset();
 
-        mSensorManager.registerListener(mLocalizer, mAccSensor, SensorManager.SENSOR_DELAY_FASTEST);
-        mSensorManager.registerListener(mLocalizer, mRotationSensor, SensorManager.SENSOR_DELAY_FASTEST);
+        mSensorManager.registerListener(mLocTracker, mAccSensor, SensorManager.SENSOR_DELAY_FASTEST);
+        mSensorManager.registerListener(mLocTracker, mRotationSensor, SensorManager.SENSOR_DELAY_FASTEST);
     }
 
     @Override
@@ -134,7 +129,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             }
         }
 
-        mSensorManager.unregisterListener(mLocalizer);
+        mSensorManager.unregisterListener(mLocTracker);
 
         super.onPause();
     }
@@ -187,7 +182,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
         mRotationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);
 
-        mLocalizer = new Localizer();
+        mLocTracker = new LocTracker();
     }
 
     public void createDefaultFragments(Bundle savedInstanceState) {
@@ -288,7 +283,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
 
     public Transform getPose() {
-        return mLocalizer.getPose();
+        return mLocTracker.getPose();
     }
 
     public enum PermissionState {
