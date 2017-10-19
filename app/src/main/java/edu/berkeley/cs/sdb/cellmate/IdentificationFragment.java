@@ -39,6 +39,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -61,12 +62,12 @@ public class IdentificationFragment extends Fragment {
     private final int CIRCULAR_BUFFER_LENGTH = 10;
     String mHost;
     String mPort;
-    double mFx;
-    double mFy;
-    double mCx;
-    double mCy;
+    float mFx;
+    float mFy;
+    float mCx;
+    float mCy;
     ManagedChannel mChannel;
-    StreamObserver<CellmateProto.ClientQueryMessage> mRequestObserver;
+    StreamObserver<CellmateProto.LocalizationRequest> mRequestObserver;
     TextView mTextView;
     TextView mInforText;
     ImageReader mImageReader;
@@ -96,9 +97,9 @@ public class IdentificationFragment extends Fragment {
     private List<String> mRecentObjects;
     private List<String> mDescriptions = new ArrayList<>();
     private byte[] mLatestImageData;
-    StreamObserver<CellmateProto.ServerRespondMessage> mResponseObserver = new StreamObserver<CellmateProto.ServerRespondMessage>() {
+    StreamObserver<CellmateProto.LocalizationResponse> mResponseObserver = new StreamObserver<CellmateProto.LocalizationResponse>() {
         @Override
-        public void onNext(CellmateProto.ServerRespondMessage value) {
+        public void onNext(CellmateProto.LocalizationResponse value) {
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
             final Activity activity = getActivity();
             if (activity != null) {
@@ -107,10 +108,10 @@ public class IdentificationFragment extends Fragment {
 
                         byte[] data = mLatestImageData;
                         Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
-                        mRoomId = value.getRoomId();
-                        Transform Plocal0 = mPoseMap.get(value.getId());
+                        mRoomId = value.getDbId();
+                        Transform Plocal0 = mPoseMap.get(value.getRequestId());
                         Transform Plocal0inv = Plocal0.inverse();
-                        mPoseMap.remove(value.getId());
+                        mPoseMap.remove(value.getRequestId());
                         Transform Plocal1 = mStateCallback.getPose();
                         Transform Pmodel0 = getPoseFromMessage(value);
                         Transform deltaLocalTransform = Plocal1.multiply(Plocal0inv);
@@ -129,7 +130,7 @@ public class IdentificationFragment extends Fragment {
                         visibility(Pmodel1, nameList, XList, YList, SizeList);
 
                         String description = "";
-                        String title = String.valueOf(value.getId());
+                        String title = String.valueOf(value.getRequestId());
                         description += "id:" + title + "\n";
                         description += "Old: \n";
                         for (int i = 0; i < nameListOld.size(); i++) {
@@ -163,7 +164,7 @@ public class IdentificationFragment extends Fragment {
                         }
 //                        MediaStore.Images.Media.insertImage(getActivity().getContentResolver(), bitmapImage, title , "");
 
-                        mStateCallback.onObjectIdentified(value.getNameList(), value.getXList(), value.getYList(), value.getSizeList(), value.getWidth(), value.getHeight());
+                        mStateCallback.onObjectIdentified(value.getItemsList(), value.getWidth(), value.getHeight());
                     } catch (IllegalStateException e) {
                         //Do nothing
                         //To fix "Fragment ControlFragment{2dab555} not attached to Activity"
@@ -245,10 +246,12 @@ public class IdentificationFragment extends Fragment {
         return new IdentificationFragment();
     }
 
-    private Transform getPoseFromMessage(CellmateProto.ServerRespondMessage value) {
-        return new Transform(value.getR11(), value.getR12(), value.getR13(), value.getTx(),
-                value.getR21(), value.getR22(), value.getR23(), value.getTy(),
-                value.getR31(), value.getR32(), value.getR33(), value.getTz());
+    private Transform getPoseFromMessage(CellmateProto.LocalizationResponse value) {
+        CellmateProto.Matrix matrix = value.getPose();
+        matrix.getData(0);
+        return new Transform(matrix.getData(0), matrix.getData(1), matrix.getData(2), matrix.getData(3),
+                             matrix.getData(4), matrix.getData(5), matrix.getData(6), matrix.getData(7),
+                             matrix.getData(8), matrix.getData(9), matrix.getData(10), matrix.getData(11));
     }
 
     private void sendRequestToServer(ByteString data, int rotateClockwiseAngle, long messageId) {
@@ -268,14 +271,12 @@ public class IdentificationFragment extends Fragment {
         }
 
         try {
-            CellmateProto.ClientQueryMessage request = CellmateProto.ClientQueryMessage.newBuilder()
+
+            CellmateProto.LocalizationRequest request = CellmateProto.LocalizationRequest.newBuilder()
                     .setImage(data)
-                    .setFx(mFx)
-                    .setFy(mFy)
-                    .setCx(mCx)
-                    .setCy(mCy)
-                    .setId(messageId)
-                    .setAngle(rotateClockwiseAngle)
+                    .setRequestId(messageId)
+                    .setCamera(CellmateProto.CameraModel.newBuilder().setCx(mCx).setCy(mCy).setFx(mFx).setFy(mFy).build())
+                    .setOrientation(rotateClockwiseAngle)
                     .build();
             mRequestObserver.onNext(request);
         } catch (RuntimeException e) {
@@ -288,16 +289,16 @@ public class IdentificationFragment extends Fragment {
     void copyAllPreferenceValue() {
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
-        mFx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
-        mFy = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fy_key), activity.getString(R.string.camera_fy_val)));
-        mCx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_cx_key), activity.getString(R.string.camera_cx_val)));
-        mCy = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_cy_key), activity.getString(R.string.camera_cy_val)));
+        mFx = Float.parseFloat(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
+        mFy = Float.parseFloat(preferences.getString(activity.getString(R.string.camera_fy_key), activity.getString(R.string.camera_fy_val)));
+        mCx = Float.parseFloat(preferences.getString(activity.getString(R.string.camera_cx_key), activity.getString(R.string.camera_cx_val)));
+        mCy = Float.parseFloat(preferences.getString(activity.getString(R.string.camera_cy_key), activity.getString(R.string.camera_cy_val)));
         mHost = preferences.getString(getString(R.string.grpc_server_addr_key), getString(R.string.grpc_server_addr_val));
         mPort = preferences.getString(getString(R.string.grpc_server_port_key), getString(R.string.grpc_server_port_val));
     }
 
-    StreamObserver<CellmateProto.ClientQueryMessage> createNewRequestObserver() {
-        return GrpcServiceGrpc.newStub(mChannel).onClientQuery(mResponseObserver);
+    StreamObserver<CellmateProto.LocalizationRequest> createNewRequestObserver() {
+        return GrpcServiceGrpc.newStub(mChannel).localize(mResponseObserver);
     }
 
     @Override
@@ -353,16 +354,19 @@ public class IdentificationFragment extends Fragment {
             mRequestObserver = createNewRequestObserver();
             GrpcServiceGrpc.GrpcServiceBlockingStub stub = GrpcServiceGrpc.newBlockingStub(mChannel);
             CellmateProto.Empty message = CellmateProto.Empty.newBuilder().build();
-            CellmateProto.Models models = stub.getModels(message);
-            List<CellmateProto.Model> modelList = models.getModelsList();
-            for (CellmateProto.Model model : modelList) {
+            CellmateProto.GetLabelsResponse models = stub.getLabels(message);
+            Map<Integer, CellmateProto.Labels> modelList = models.getLabelsMapMap();
+
+            for (Map.Entry<Integer, CellmateProto.Labels> entry : modelList.entrySet()) {
+                int dbId = entry.getKey();
+                CellmateProto.Labels labels = entry.getValue();
                 List<Label> labelsInModel = new ArrayList<>();
-                for (CellmateProto.Label label : model.getLabelsList()) {
+                for (CellmateProto.Label label : labels.getLabelsList()) {
                     Point3 position = new Point3(label.getX(), label.getY(), label.getZ());
-                    labelsInModel.add(new Label(label.getRoomId(), position, label.getName()));
+                    labelsInModel.add(new Label(label.getDbId(), position, label.getName()));
                     System.out.println(label.getName());
                 }
-                mLabels.put(model.getId(), labelsInModel);
+                mLabels.put(dbId, labelsInModel);
             }
         } catch (RuntimeException e) {
 
@@ -531,7 +535,7 @@ public class IdentificationFragment extends Fragment {
     }
 
     public interface StateCallback {
-        void onObjectIdentified(List<String> name, List<Double> x, List<Double> y, List<Double> size, double width, double height);
+        void onObjectIdentified(List<CellmateProto.Item> foundItems, double width, double height);
 
         Transform getPose();
     }
