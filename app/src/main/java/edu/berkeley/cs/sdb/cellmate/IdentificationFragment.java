@@ -1,5 +1,6 @@
 package edu.berkeley.cs.sdb.cellmate;
 
+import edu.berkeley.cs.sdb.snaplink.*;
 import android.app.Activity;
 import android.app.Fragment;
 import android.content.Context;
@@ -67,7 +68,7 @@ public class IdentificationFragment extends Fragment {
     float mCx;
     float mCy;
     ManagedChannel mChannel;
-    StreamObserver<edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationRequest> mRequestObserver;
+    StreamObserver<SnapLinkProto.LocalizationRequest> mRequestObserver;
     TextView mTextView;
     TextView mInforText;
     ImageReader mImageReader;
@@ -97,9 +98,9 @@ public class IdentificationFragment extends Fragment {
     private List<String> mRecentObjects;
     private List<String> mDescriptions = new ArrayList<>();
     private byte[] mLatestImageData;
-    StreamObserver<edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationResponse> mResponseObserver = new StreamObserver<edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationResponse>() {
+    StreamObserver<SnapLinkProto.LocalizationResponse> mResponseObserver = new StreamObserver<SnapLinkProto.LocalizationResponse>() {
         @Override
-        public void onNext(edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationResponse value) {
+        public void onNext(SnapLinkProto.LocalizationResponse value) {
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
             final Activity activity = getActivity();
             if (activity != null) {
@@ -111,6 +112,7 @@ public class IdentificationFragment extends Fragment {
 
                         byte[] data = mLatestImageData;
 //                        Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
+
                         mRoomId = value.getDbId();
                         Transform Plocal0 = mPoseMap.get(value.getRequestId());
                         Transform Plocal0inv = Plocal0.inverse();
@@ -120,19 +122,22 @@ public class IdentificationFragment extends Fragment {
                         Transform T = Pmodel0.multiply(Plocal0inv);
                         Transform Pmodel1 = T.multiply(Plocal1);
 
+
                         ArrayList<String> nameListOld = new ArrayList<>();
                         ArrayList<Float> XListOld = new ArrayList<>();
                         ArrayList<Float> YListOld = new ArrayList<>();
                         ArrayList<Float> SizeListOld = new ArrayList<>();
+
                         visibility(Pmodel0, nameListOld, XListOld, YListOld, SizeListOld,  value.getAngle(),value.getWidth0(), value.getHeight0());
                         rotateBack(XListOld,YListOld,value.getAngle(),(int)value.getWidth0(), (int)value.getHeight0());
+
                         System.out.println("Local visibility result:");
                         for(int i = 0; i < nameListOld.size(); i++) {
                             System.out.println(nameListOld.get(i) + " " + XListOld.get(i) + " " + YListOld.get(i));
                         }
                         System.out.println("Remote visibility result:");
                         for(int i = 0; i < value.getItemsList().size(); i++) {
-                            edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Item item = value.getItemsList().get(i);
+                            SnapLinkProto.Item item = value.getItemsList().get(i);
                             System.out.println(item.getName() + " " + item.getX() + " " + item.getY());
                         }
 
@@ -204,10 +209,8 @@ public class IdentificationFragment extends Fragment {
 
         @Override
         public void onError(Throwable t) {
-            showToast("Server is disconnected due to grpc error", Toast.LENGTH_LONG);
-            System.out.println("bb");
+            System.out.println("onError");
             t.printStackTrace();
-            throw new IllegalStateException("aa");
         }
 
         @Override
@@ -268,10 +271,8 @@ public class IdentificationFragment extends Fragment {
         return new IdentificationFragment();
     }
 
-    private Transform getPoseFromMessage(edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationResponse value) {
-        edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Matrix matrix = value.getPose();
-        System.out.println(matrix.getCols() + "cols value");
-        matrix.getData(0);
+    private Transform getPoseFromMessage(SnapLinkProto.LocalizationResponse value) {
+        SnapLinkProto.Matrix matrix = value.getPose();
         return new Transform(matrix.getData(0), matrix.getData(1), matrix.getData(2), matrix.getData(3),
                              matrix.getData(4), matrix.getData(5), matrix.getData(6), matrix.getData(7),
                              matrix.getData(8), matrix.getData(9), matrix.getData(10), matrix.getData(11));
@@ -280,10 +281,10 @@ public class IdentificationFragment extends Fragment {
     private void sendRequestToServer(ByteString data, int rotateClockwiseAngle, long messageId) {
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
-        double Fx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
-        double Fy = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_fy_key), activity.getString(R.string.camera_fy_val)));
-        double Cx = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_cx_key), activity.getString(R.string.camera_cx_val)));
-        double Cy = Double.parseDouble(preferences.getString(activity.getString(R.string.camera_cy_key), activity.getString(R.string.camera_cy_val)));
+        float Fx = Float.parseFloat(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
+        float Fy = Float.parseFloat(preferences.getString(activity.getString(R.string.camera_fy_key), activity.getString(R.string.camera_fy_val)));
+        float Cx = Float.parseFloat(preferences.getString(activity.getString(R.string.camera_cx_key), activity.getString(R.string.camera_cx_val)));
+        float Cy = Float.parseFloat(preferences.getString(activity.getString(R.string.camera_cy_key), activity.getString(R.string.camera_cy_val)));
         String grpcCellmateServerAddr = preferences.getString(getString(R.string.grpc_server_addr_key), getString(R.string.grpc_server_addr_val));
         String grpcCellmateServerPort = preferences.getString(getString(R.string.grpc_server_port_key), getString(R.string.grpc_server_port_val));
         if (mHost != grpcCellmateServerAddr || mPort != grpcCellmateServerPort ||
@@ -293,12 +294,14 @@ public class IdentificationFragment extends Fragment {
             mRequestObserver = createNewRequestObserver();
         }
 
+
+
         try {
 
-            edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationRequest request = edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationRequest.newBuilder()
+            SnapLinkProto.LocalizationRequest request = SnapLinkProto.LocalizationRequest.newBuilder()
                     .setImage(data)
                     .setRequestId(messageId)
-                    .setCamera(edu.berkeley.cs.sdb.snaplink.SnapLinkProto.CameraModel.newBuilder().setCx(mCx).setCy(mCy).setFx(mFx).setFy(mFy).build())
+                    .setCamera(SnapLinkProto.CameraModel.newBuilder().setCx(mCx).setCy(mCy).setFx(mFx).setFy(mFy).build())
                     .setOrientation(rotateClockwiseAngle)
                     .build();
             mRequestObserver.onNext(request);
@@ -320,8 +323,8 @@ public class IdentificationFragment extends Fragment {
         mPort = preferences.getString(getString(R.string.grpc_server_port_key), getString(R.string.grpc_server_port_val));
     }
 
-    StreamObserver<edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationRequest> createNewRequestObserver() {
-        return edu.berkeley.cs.sdb.snaplink.GrpcServiceGrpc.newStub(mChannel).localize(mResponseObserver);
+    StreamObserver<SnapLinkProto.LocalizationRequest> createNewRequestObserver() {
+        return GrpcServiceGrpc.newStub(mChannel).localize(mResponseObserver);
     }
 
     @Override
@@ -332,12 +335,14 @@ public class IdentificationFragment extends Fragment {
         } catch (ClassCastException e) {
             throw new RuntimeException(e);
         }
+        System.out.println("onAttach");
     }
 
     @Override
     public View onCreateView(LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         mView = inflater.inflate(R.layout.identification_fragment, container, false);
+        System.out.println("onCreateView");
         return mView;
     }
 
@@ -357,12 +362,15 @@ public class IdentificationFragment extends Fragment {
         mImageReader.setOnImageAvailableListener(
                 mOnImageAvailableListener, null);
         mHandler = new Handler();
+        System.out.println("onViewCreated");
+
 
     }
 
     @Override
     public void onActivityCreated(Bundle savedInstanceState) {
         super.onActivityCreated(savedInstanceState);
+        System.out.println("onActivityCreated pre");
 
         mTargetObject = null;
         mRecentObjects = new ArrayList<>(CIRCULAR_BUFFER_LENGTH);
@@ -374,17 +382,17 @@ public class IdentificationFragment extends Fragment {
 
         try {
             mChannel = ManagedChannelBuilder.forAddress(mHost, Integer.valueOf(mPort)).usePlaintext(true).build();
-            mRequestObserver = createNewRequestObserver();
-            edu.berkeley.cs.sdb.snaplink.GrpcServiceGrpc.GrpcServiceBlockingStub stub = edu.berkeley.cs.sdb.snaplink.GrpcServiceGrpc.newBlockingStub(mChannel);
-            edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Empty message = edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Empty.newBuilder().build();
-            edu.berkeley.cs.sdb.snaplink.SnapLinkProto.GetLabelsResponse models = stub.getLabels(message);
-            Map<Integer, edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Labels> modelList = models.getLabelsMapMap();
+            GrpcServiceGrpc.GrpcServiceBlockingStub stub = GrpcServiceGrpc.newBlockingStub(mChannel);
+            SnapLinkProto.Empty message = SnapLinkProto.Empty.newBuilder().build();
+            SnapLinkProto.GetLabelsResponse response = stub.getLabels(message);
+            Map<Integer, SnapLinkProto.Labels> labelsMap = response.getLabelsMapMap();
 
-            for (Map.Entry<Integer, edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Labels> entry : modelList.entrySet()) {
+
+            for (Map.Entry<Integer, SnapLinkProto.Labels> entry : labelsMap.entrySet()) {
                 int dbId = entry.getKey();
-                edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Labels labels = entry.getValue();
+                SnapLinkProto.Labels labels = entry.getValue();
                 List<Label> labelsInModel = new ArrayList<>();
-                for (edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Label label : labels.getLabelsList()) {
+                for (SnapLinkProto.Label label : labels.getLabelsList()) {
                     Point3 position = new Point3(label.getX(), label.getY(), label.getZ());
                     labelsInModel.add(new Label(label.getDbId(), position, label.getName()));
                     System.out.println(label.getName());
@@ -395,6 +403,11 @@ public class IdentificationFragment extends Fragment {
             System.out.println("Getting Labels failed");
             e.printStackTrace();
         }
+
+        mRequestObserver = createNewRequestObserver();
+
+        System.out.println("onActivityCreated");
+
 
     }
 
@@ -426,6 +439,7 @@ public class IdentificationFragment extends Fragment {
         } else {
             mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
         }
+
 
 
     }
@@ -482,6 +496,7 @@ public class IdentificationFragment extends Fragment {
     }
 
     private void visibility(Transform pose, List<String> nameList, List<Float> XList, List<Float> YList, List<Float> SizeList, double angle, double width0, double height0) {
+        System.out.println("Inside visibility");
         CameraModel camera = new CameraModel("CameraModel",
                 Camera.getInstance().getCaptureSize(),
                 mFx, mFy, mCx, mCy);
@@ -504,6 +519,7 @@ public class IdentificationFragment extends Fragment {
         // image coordinate
         Transform poseInCamera = pose.inverse();
         Mat R = new Mat(3, 3, CV_64FC1);
+        System.out.println("3");
         R.put(0, 0, new double[]{poseInCamera.r11()});
         R.put(0, 1, new double[]{poseInCamera.r12()});
         R.put(0, 2, new double[]{poseInCamera.r13()});
@@ -524,22 +540,22 @@ public class IdentificationFragment extends Fragment {
         projectPoints(objectPoints, rvec, tvec, K, new MatOfDouble(), planePoints);
 
 
-//        System.out.println("Inside visibility");
-//        poseInCamera.print();
-//        double[] data = new double[3];
-//        rvec.get(0,0,data);
-//        System.out.println("rvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
-//        tvec.get(0,0,data);
-//        System.out.println("tvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
-//        float[] dataF = new float[9];
-//        K.get(0,0,dataF);
-//        System.out.println("K: " + " " + dataF[0] + " " + dataF[1] + " " + dataF[2] + "\n "
-//                + dataF[3] + " " + dataF[4] + " " + dataF[5] + "\n "
-//                + dataF[6] + " " + dataF[7] + " " + dataF[8] + "\n ");
-//        List<Point3> pointsList = objectPoints.toList();
-//        for(int i = 0; i < pointsList.size(); i++) {
-//            System.out.println(names.get(i) + " " + pointsList.get(i).toString());
-//        }
+
+        poseInCamera.print();
+        double[] data = new double[3];
+        rvec.get(0,0,data);
+        System.out.println("rvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
+        tvec.get(0,0,data);
+        System.out.println("tvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
+        float[] dataF = new float[9];
+        K.get(0,0,dataF);
+        System.out.println("K: " + " " + dataF[0] + " " + dataF[1] + " " + dataF[2] + "\n "
+                + dataF[3] + " " + dataF[4] + " " + dataF[5] + "\n "
+                + dataF[6] + " " + dataF[7] + " " + dataF[8] + "\n ");
+        List<Point3> pointsList = objectPoints.toList();
+        for(int i = 0; i < pointsList.size(); i++) {
+            System.out.println(names.get(i) + " " + pointsList.get(i).toString());
+        }
 
         // find points in the image
         int width = camera.getImageSize().getWidth();

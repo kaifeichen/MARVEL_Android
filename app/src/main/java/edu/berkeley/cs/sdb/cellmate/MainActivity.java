@@ -183,6 +183,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         mRotationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);
 
         mLocTracker = new LocTracker();
+        System.out.println("OnCreate done");
     }
 
     public void createDefaultFragments(Bundle savedInstanceState) {
