@@ -1,76 +1,106 @@
 package edu.berkeley.cs.sdb.cellmate.data;
 
+
 import android.opengl.Matrix;
 
-import org.opencv.core.CvType;
-import org.opencv.core.Mat;
+
+
+/**
+ * Created by tongli on 9/28/17.
+ */
 
 public class Transform {
-    private Mat mData;
+
+    private float [] mData ;
 
     public Transform(float r11, float r12, float r13, float t14, //
                      float r21, float r22, float r23, float t24, //
                      float r31, float r32, float r33, float t34) {
-        mData = new Mat(4, 4, CvType.CV_32FC1);
-        int row = 0, col = 0;
-        mData.put(row, col, r11, r12, r13, t14, r21, r22, r23, t24, r31, r32, r33, t34, 0, 0, 0, 1);
+        mData = new float[16];
+        mData[0] = r11;
+        mData[1] = r21;
+        mData[2] = r31;
+        mData[3] = 0;
+        mData[4] = r12;
+        mData[5] = r22;
+        mData[6] = r32;
+        mData[7] = 0;
+        mData[8] = r13;
+        mData[9] = r23;
+        mData[10] = r33;
+        mData[11] = 0;
+        mData[12] = t14;
+        mData[13] = t24;
+        mData[14] = t34;
+        mData[15] = 1;
     }
 
-    private Transform(Mat data) {
+    private Transform(float[] data) {
         mData = data;
     }
 
 
+    public void print(){
+        System.out.print( r11() + " " + r12() + " " + r13() + " " + x() + "\n"
+                + r21() + " " + r22() + " " + r23() + " " + y() + "\n"
+                + r31() + " " + r32() + " " + r33() + " " + z() + "\n"
+                + 0     + " " + 0     + " " + 0     + " " + 1   + "\n");
+
+    }
+
+
     public float r11() {
-        return (float) mData.get(0, 0)[0];
+        return mData[0];
     }
 
     public float r12() {
-        return (float) mData.get(0, 1)[0];
+        return mData[4];
     }
 
     public float r13() {
-        return (float) mData.get(0, 2)[0];
+        return mData[8];
     }
 
     public float r21() {
-        return (float) mData.get(1, 0)[0];
+        return mData[1];
     }
 
     public float r22() {
-        return (float) mData.get(1, 1)[0];
+        return mData[5];
     }
 
     public float r23() {
-        return (float) mData.get(1, 2)[0];
+        return mData[9];
     }
 
     public float r31() {
-        return (float) mData.get(2, 0)[0];
+        return mData[2];
     }
 
     public float r32() {
-        return (float) mData.get(2, 1)[0];
+        return mData[6];
     }
 
     public float r33() {
-        return (float) mData.get(2, 2)[0];
+        return mData[10];
     }
 
     public float x() {
-        return (float) mData.get(0, 3)[0];
+        return mData[12];
     }
 
     public float y() {
-        return (float) mData.get(1, 3)[0];
+        return mData[13];
     }
 
     public float z() {
-        return (float) mData.get(2, 3)[0];
+        return mData[14];
     }
 
     public Transform inverse() {
-        return new Transform(mData.inv());
+        float[] inversed = new float[16];
+        Matrix.invertM(inversed, 0, mData, 0);
+        return new Transform(inversed);
     }
 
     public Transform multiply(Transform t) {
@@ -88,30 +118,20 @@ public class Transform {
     //m[offset +  3] m[offset +  7] m[offset + 11] m[offset + 15]
     private float[] fromTransformToOpenGlMatrix(Transform t) {
         float[] result = new float[16];
-        result[0] = t.r11();
-        result[4] = t.r12();
-        result[8] = t.r13();
-        result[12] = t.x();
-        result[1] = t.r21();
-        result[5] = t.r22();
-        result[9] = t.r23();
-        result[13] = t.y();
-        result[2] = t.r31();
-        result[6] = t.r32();
-        result[10] = t.r33();
-        result[14] = t.z();
-        result[3] = 0;
-        result[7] = 0;
-        result[11] = 0;
-        result[15] = 1;
+        result[0] = t.r11();  result[4] = t.r12();  result[8] = t.r13();  result[12] = t.x();
+        result[1] = t.r21();  result[5] = t.r22();  result[9] = t.r23();  result[13] = t.y();
+        result[2] = t.r31();  result[6] = t.r32();  result[10] = t.r33(); result[14] = t.z();
+        result[3] = 0      ;  result[7] = 0      ;  result[11] = 0      ; result[15] = 1;
         return result;
     }
 
     private Transform fromOpenGlMatrixToTransform(float[] t) {
         return new Transform(t[0], t[4], t[8], t[12],
                 t[1], t[5], t[9], t[13],
-                t[2], t[6], t[10], t[14]);
+                t[2], t[6], t[10],t[14]);
     }
 
 
 }
+
+

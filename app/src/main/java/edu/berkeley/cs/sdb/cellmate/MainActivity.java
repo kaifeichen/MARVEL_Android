@@ -67,10 +67,10 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
 
     @Override
-    public void onObjectIdentified(List<CellmateProto.Item> foundItems, double width, double height) {
+    public void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size, double width, double height) {
         PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
         if (previewFragment != null) {
-            previewFragment.drawHighlight(foundItems, width, height);
+            previewFragment.drawHighlight(name, x, y, size, width, height);
         }
 
     }

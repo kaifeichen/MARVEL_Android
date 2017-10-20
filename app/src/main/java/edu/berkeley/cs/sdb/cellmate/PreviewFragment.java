@@ -219,11 +219,11 @@ public class PreviewFragment extends Fragment {
         mTextureView.setTransform(matrix);
     }
 
-    public void drawHighlight(List<CellmateProto.Item> items, double width, double height) {
+    public void drawHighlight(List<String> name, List<Float> x, List<Float> y, List<Float> size, double width, double height) {
         final Activity activity = getActivity();
         if (activity != null) {
             activity.runOnUiThread(() -> {
-                if (items.get(0).getX() != -1) {
+                if (x.get(0) != -1) {
                     highlightFrameSize = new Size((int) width, (int) height);
 
                     Paint paint = new Paint();
@@ -241,13 +241,12 @@ public class PreviewFragment extends Fragment {
                     mLeft.clear();
                     mBottom.clear();
                     mTop.clear();
-                    for (int i = 0; i < items.size(); i++) {
-                        CellmateProto.Item item = items.get(i);
-                        mName.add(item.getName());
-                        mRight.add(item.getX() + item.getSize());
-                        mLeft.add(item.getX() - item.getSize());
-                        mBottom.add(item.getY() + item.getSize());
-                        mTop.add(item.getY() - item.getSize());
+                    for (int i = 0; i < name.size(); i++) {
+                        mName.add(name.get(i));
+                        mRight.add(x.get(i) + size.get(i));
+                        mLeft.add(x.get(i) - size.get(i));
+                        mBottom.add(y.get(i) + size.get(i));
+                        mTop.add(y.get(i) - size.get(i));
 
 
 //                        Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
@@ -261,8 +260,8 @@ public class PreviewFragment extends Fragment {
 //                        canvas.drawRect(rect5, paint);
                         Rect rect = new Rect(mLeft.get(i).intValue(), mTop.get(i).intValue(), mRight.get(i).intValue(), mBottom.get(i).intValue());
                         canvas.drawRect(rect, paint);
-                        paint.setTextSize(item.getSize());
-                        canvas.drawText(item.getName(), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
+                        paint.setTextSize(size.get(i).floatValue());
+                        canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
                     }
 
                     mHighLight.setImageBitmap(mBmp);
@@ -277,6 +276,7 @@ public class PreviewFragment extends Fragment {
             });
         }
     }
+
 
     public void clearHighlight() {
         final Activity activity = getActivity();

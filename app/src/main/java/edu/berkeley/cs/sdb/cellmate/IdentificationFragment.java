@@ -67,7 +67,7 @@ public class IdentificationFragment extends Fragment {
     float mCx;
     float mCy;
     ManagedChannel mChannel;
-    StreamObserver<CellmateProto.LocalizationRequest> mRequestObserver;
+    StreamObserver<edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationRequest> mRequestObserver;
     TextView mTextView;
     TextView mInforText;
     ImageReader mImageReader;
@@ -97,37 +97,56 @@ public class IdentificationFragment extends Fragment {
     private List<String> mRecentObjects;
     private List<String> mDescriptions = new ArrayList<>();
     private byte[] mLatestImageData;
-    StreamObserver<CellmateProto.LocalizationResponse> mResponseObserver = new StreamObserver<CellmateProto.LocalizationResponse>() {
+    StreamObserver<edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationResponse> mResponseObserver = new StreamObserver<edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationResponse>() {
         @Override
-        public void onNext(CellmateProto.LocalizationResponse value) {
+        public void onNext(edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationResponse value) {
             Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
             final Activity activity = getActivity();
             if (activity != null) {
                 activity.runOnUiThread(() -> {
                     try {
+                        if(!value.getSuccess()) {
+                            return;
+                        }
 
                         byte[] data = mLatestImageData;
-                        Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
+//                        Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
                         mRoomId = value.getDbId();
                         Transform Plocal0 = mPoseMap.get(value.getRequestId());
                         Transform Plocal0inv = Plocal0.inverse();
                         mPoseMap.remove(value.getRequestId());
                         Transform Plocal1 = mStateCallback.getPose();
                         Transform Pmodel0 = getPoseFromMessage(value);
-                        Transform deltaLocalTransform = Plocal1.multiply(Plocal0inv);
-                        Transform Pmodel1 = deltaLocalTransform.multiply(Pmodel0);
+                        Transform T = Pmodel0.multiply(Plocal0inv);
+                        Transform Pmodel1 = T.multiply(Plocal1);
 
                         ArrayList<String> nameListOld = new ArrayList<>();
-                        ArrayList<Double> XListOld = new ArrayList<>();
-                        ArrayList<Double> YListOld = new ArrayList<>();
-                        ArrayList<Double> SizeListOld = new ArrayList<>();
-                        visibility(Pmodel0, nameListOld, XListOld, YListOld, SizeListOld);
+                        ArrayList<Float> XListOld = new ArrayList<>();
+                        ArrayList<Float> YListOld = new ArrayList<>();
+                        ArrayList<Float> SizeListOld = new ArrayList<>();
+                        visibility(Pmodel0, nameListOld, XListOld, YListOld, SizeListOld,  value.getAngle(),value.getWidth0(), value.getHeight0());
+                        rotateBack(XListOld,YListOld,value.getAngle(),(int)value.getWidth0(), (int)value.getHeight0());
+                        System.out.println("Local visibility result:");
+                        for(int i = 0; i < nameListOld.size(); i++) {
+                            System.out.println(nameListOld.get(i) + " " + XListOld.get(i) + " " + YListOld.get(i));
+                        }
+                        System.out.println("Remote visibility result:");
+                        for(int i = 0; i < value.getItemsList().size(); i++) {
+                            edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Item item = value.getItemsList().get(i);
+                            System.out.println(item.getName() + " " + item.getX() + " " + item.getY());
+                        }
 
                         ArrayList<String> nameList = new ArrayList<>();
-                        ArrayList<Double> XList = new ArrayList<>();
-                        ArrayList<Double> YList = new ArrayList<>();
-                        ArrayList<Double> SizeList = new ArrayList<>();
-                        visibility(Pmodel1, nameList, XList, YList, SizeList);
+                        ArrayList<Float> XList = new ArrayList<>();
+                        ArrayList<Float> YList = new ArrayList<>();
+                        ArrayList<Float> SizeList = new ArrayList<>();
+                        visibility(Pmodel1, nameList, XList, YList, SizeList, value.getAngle(),value.getWidth0(), value.getHeight0());
+                        rotateBack(XList,YList,value.getAngle(),(int)value.getWidth0(), (int)value.getHeight0());
+                        System.out.println("predicted visibility result:");
+                        for(int i = 0; i < nameList.size(); i++) {
+                            System.out.println(nameList.get(i) + " " + XList.get(i) + " " + YList.get(i));
+                        }
+
 
                         String description = "";
                         String title = String.valueOf(value.getRequestId());
@@ -145,26 +164,27 @@ public class IdentificationFragment extends Fragment {
 
                         mDescriptions.add(description);
 
-                        FileOutputStream fos = null;
-
-                        File myPath = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "/imu/" + title + ".jpg");
-
-                        try {
-                            fos = new FileOutputStream(myPath);
-                            // Use the compress method on the BitMap object to write image to the OutputStream
-                            bitmapImage.compress(Bitmap.CompressFormat.JPEG, 100, fos);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        } finally {
-                            try {
-                                fos.close();
-                            } catch (IOException e) {
-                                e.printStackTrace();
-                            }
-                        }
+//                        FileOutputStream fos = null;
+//
+//                        File myPath = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "/imu/" + title + ".jpg");
+//
+//                        try {
+//                            fos = new FileOutputStream(myPath);
+//                            // Use the compress method on the BitMap object to write image to the OutputStream
+//                            bitmapImage.compress(Bitmap.CompressFormat.JPEG, 100, fos);
+//                        } catch (Exception e) {
+//                            e.printStackTrace();
+//                        } finally {
+//                            try {
+//                                fos.close();
+//                            } catch (IOException e) {
+//                                e.printStackTrace();
+//                            }
+//                        }
 //                        MediaStore.Images.Media.insertImage(getActivity().getContentResolver(), bitmapImage, title , "");
 
-                        mStateCallback.onObjectIdentified(value.getItemsList(), value.getWidth(), value.getHeight());
+//                        mStateCallback.onObjectIdentified(value.getItemsList(), value.getWidth(), value.getHeight());
+                        mStateCallback.onObjectIdentified(nameList, XList, YList, SizeList, value.getWidth(), value.getHeight());
                     } catch (IllegalStateException e) {
                         //Do nothing
                         //To fix "Fragment ControlFragment{2dab555} not attached to Activity"
@@ -185,7 +205,9 @@ public class IdentificationFragment extends Fragment {
         @Override
         public void onError(Throwable t) {
             showToast("Server is disconnected due to grpc error", Toast.LENGTH_LONG);
+            System.out.println("bb");
             t.printStackTrace();
+            throw new IllegalStateException("aa");
         }
 
         @Override
@@ -246,8 +268,9 @@ public class IdentificationFragment extends Fragment {
         return new IdentificationFragment();
     }
 
-    private Transform getPoseFromMessage(CellmateProto.LocalizationResponse value) {
-        CellmateProto.Matrix matrix = value.getPose();
+    private Transform getPoseFromMessage(edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationResponse value) {
+        edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Matrix matrix = value.getPose();
+        System.out.println(matrix.getCols() + "cols value");
         matrix.getData(0);
         return new Transform(matrix.getData(0), matrix.getData(1), matrix.getData(2), matrix.getData(3),
                              matrix.getData(4), matrix.getData(5), matrix.getData(6), matrix.getData(7),
@@ -272,10 +295,10 @@ public class IdentificationFragment extends Fragment {
 
         try {
 
-            CellmateProto.LocalizationRequest request = CellmateProto.LocalizationRequest.newBuilder()
+            edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationRequest request = edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationRequest.newBuilder()
                     .setImage(data)
                     .setRequestId(messageId)
-                    .setCamera(CellmateProto.CameraModel.newBuilder().setCx(mCx).setCy(mCy).setFx(mFx).setFy(mFy).build())
+                    .setCamera(edu.berkeley.cs.sdb.snaplink.SnapLinkProto.CameraModel.newBuilder().setCx(mCx).setCy(mCy).setFx(mFx).setFy(mFy).build())
                     .setOrientation(rotateClockwiseAngle)
                     .build();
             mRequestObserver.onNext(request);
@@ -297,8 +320,8 @@ public class IdentificationFragment extends Fragment {
         mPort = preferences.getString(getString(R.string.grpc_server_port_key), getString(R.string.grpc_server_port_val));
     }
 
-    StreamObserver<CellmateProto.LocalizationRequest> createNewRequestObserver() {
-        return GrpcServiceGrpc.newStub(mChannel).localize(mResponseObserver);
+    StreamObserver<edu.berkeley.cs.sdb.snaplink.SnapLinkProto.LocalizationRequest> createNewRequestObserver() {
+        return edu.berkeley.cs.sdb.snaplink.GrpcServiceGrpc.newStub(mChannel).localize(mResponseObserver);
     }
 
     @Override
@@ -352,16 +375,16 @@ public class IdentificationFragment extends Fragment {
         try {
             mChannel = ManagedChannelBuilder.forAddress(mHost, Integer.valueOf(mPort)).usePlaintext(true).build();
             mRequestObserver = createNewRequestObserver();
-            GrpcServiceGrpc.GrpcServiceBlockingStub stub = GrpcServiceGrpc.newBlockingStub(mChannel);
-            CellmateProto.Empty message = CellmateProto.Empty.newBuilder().build();
-            CellmateProto.GetLabelsResponse models = stub.getLabels(message);
-            Map<Integer, CellmateProto.Labels> modelList = models.getLabelsMapMap();
+            edu.berkeley.cs.sdb.snaplink.GrpcServiceGrpc.GrpcServiceBlockingStub stub = edu.berkeley.cs.sdb.snaplink.GrpcServiceGrpc.newBlockingStub(mChannel);
+            edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Empty message = edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Empty.newBuilder().build();
+            edu.berkeley.cs.sdb.snaplink.SnapLinkProto.GetLabelsResponse models = stub.getLabels(message);
+            Map<Integer, edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Labels> modelList = models.getLabelsMapMap();
 
-            for (Map.Entry<Integer, CellmateProto.Labels> entry : modelList.entrySet()) {
+            for (Map.Entry<Integer, edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Labels> entry : modelList.entrySet()) {
                 int dbId = entry.getKey();
-                CellmateProto.Labels labels = entry.getValue();
+                edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Labels labels = entry.getValue();
                 List<Label> labelsInModel = new ArrayList<>();
-                for (CellmateProto.Label label : labels.getLabelsList()) {
+                for (edu.berkeley.cs.sdb.snaplink.SnapLinkProto.Label label : labels.getLabelsList()) {
                     Point3 position = new Point3(label.getX(), label.getY(), label.getZ());
                     labelsInModel.add(new Label(label.getDbId(), position, label.getName()));
                     System.out.println(label.getName());
@@ -369,7 +392,8 @@ public class IdentificationFragment extends Fragment {
                 mLabels.put(dbId, labelsInModel);
             }
         } catch (RuntimeException e) {
-
+            System.out.println("Getting Labels failed");
+            e.printStackTrace();
         }
 
     }
@@ -457,11 +481,11 @@ public class IdentificationFragment extends Fragment {
         }
     }
 
-    private void visibility(Transform pose, List<String> nameList, List<Double> XList, List<Double> YList, List<Double> SizeList) {
+    private void visibility(Transform pose, List<String> nameList, List<Float> XList, List<Float> YList, List<Float> SizeList, double angle, double width0, double height0) {
         CameraModel camera = new CameraModel("CameraModel",
                 Camera.getInstance().getCaptureSize(),
-                (float) mFx, (float) mFy,
-                (float) mCx, (float) mCy);
+                mFx, mFy, mCx, mCy);
+        setIntrinsics(width0, height0, angle, camera);
         if (mLabels.get(mRoomId).isEmpty()) {
             return;
         }
@@ -499,33 +523,56 @@ public class IdentificationFragment extends Fragment {
         objectPoints.fromList(points3);
         projectPoints(objectPoints, rvec, tvec, K, new MatOfDouble(), planePoints);
 
+
+//        System.out.println("Inside visibility");
+//        poseInCamera.print();
+//        double[] data = new double[3];
+//        rvec.get(0,0,data);
+//        System.out.println("rvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
+//        tvec.get(0,0,data);
+//        System.out.println("tvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
+//        float[] dataF = new float[9];
+//        K.get(0,0,dataF);
+//        System.out.println("K: " + " " + dataF[0] + " " + dataF[1] + " " + dataF[2] + "\n "
+//                + dataF[3] + " " + dataF[4] + " " + dataF[5] + "\n "
+//                + dataF[6] + " " + dataF[7] + " " + dataF[8] + "\n ");
+//        List<Point3> pointsList = objectPoints.toList();
+//        for(int i = 0; i < pointsList.size(); i++) {
+//            System.out.println(names.get(i) + " " + pointsList.get(i).toString());
+//        }
+
         // find points in the image
         int width = camera.getImageSize().getWidth();
         int height = camera.getImageSize().getHeight();
         Point center = new Point(width / 2, height / 2);
         List<Point> points2 = planePoints.toList();
-        Map<Double, Pair<String, Point>> resultMap = new HashMap<>();
+        Map<Float, Pair<String, Point>> resultMap = new HashMap<>();
         for (int i = 0; i < points3.size(); ++i) {
             String name = names.get(i);
 
             if (isInFrontOfCamera(points3.get(i), poseInCamera)) {
-                double dist = Math.sqrt(points2.get(i).dot(center));
+                Float dist = (float)Math.sqrt(points2.get(i).dot(center));
                 resultMap.put(dist, new Pair<String, Point>(name, points2.get(i)));
             }
         }
 
-        double size;
+        float size;
         if (width > height) {
             size = height / 10;
         } else {
             size = width / 10;
         }
-        for (Map.Entry<Double, Pair<String, Point>> entry : resultMap.entrySet()) {
+        for (Map.Entry<Float, Pair<String, Point>> entry : resultMap.entrySet()) {
             Pair<String, Point> result = entry.getValue();
             nameList.add(result.first);
-            XList.add(result.second.x);
-            YList.add(result.second.y);
+            XList.add((float)result.second.x);
+            YList.add((float)result.second.y);
             SizeList.add(size);
+        }
+        if(nameList.isEmpty()) {
+            nameList.add("None");
+            XList.add(-1.0f);
+            YList.add(-1.0f);
         }
     }
 
@@ -535,8 +582,54 @@ public class IdentificationFragment extends Fragment {
     }
 
     public interface StateCallback {
-        void onObjectIdentified(List<CellmateProto.Item> foundItems, double width, double height);
-
+        void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size, double width, double height);
         Transform getPose();
+    }
+
+    private void rotateBack(List<Float> xList, List<Float> yList, double angle,
+                            int width, int height) {
+        for (int i = 0; i < xList.size(); i++) {
+            float oldX = xList.get(i);
+            float oldY = yList.get(i);
+            if (oldX == -1) {
+                continue;
+            }
+            if (angle == 90) {
+                // do nothing
+            } else if (angle == 180) {
+                xList.set(i, oldY);
+                yList.set(i, width - oldX);
+            } else if (angle == 270) {
+                xList.set(i, width - oldX);
+                yList.set(i, height - oldY);
+            } else {
+                // angle = 0
+                xList.set(i, height - oldY);
+                yList.set(i, oldX);
+            }
+        }
+    }
+
+    private void setIntrinsics(double width, double height, double angle, CameraModel model) {
+        double oldCx = model.getCx();
+        double oldCy = model.getCy();
+        double newCx = 0;
+        double newCy = 0;
+        if (angle == 0) {
+            newCx = oldCx;
+            newCy = oldCy;
+        } else if (angle == 90) {
+            newCx = width - oldCy;
+            newCy = oldCx;
+        } else if (angle == 180) {
+            newCx = width - oldCx;
+            newCy = height - oldCy;
+        } else if (angle == 270) {
+            newCx = oldCy;
+            newCy = height - oldCx;
+        }
+        model.setCx((float)newCx);
+        model.setCy((float)newCy);
+
     }
 }
