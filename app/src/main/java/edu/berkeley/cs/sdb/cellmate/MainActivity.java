@@ -14,6 +14,7 @@ import android.support.v4.content.ContextCompat;
 import android.support.v7.app.ActionBar;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.util.Size;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -67,13 +68,14 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
 
     @Override
-    public void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size, double width, double height) {
+    public void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
         PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
         if (previewFragment != null) {
-            previewFragment.drawHighlight(name, x, y, size, width, height);
+            previewFragment.drawHighlight(name, x, y, size);
         }
 
     }
+
 
     @Override
     public void previewOnClicked(boolean isTargeting, String target) {
@@ -283,7 +285,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         }
     }
 
-    public Transform getPose() {
+    public Transform getPoseAP() {
         return mLocTracker.getPose();
     }
 

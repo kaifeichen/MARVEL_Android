@@ -219,12 +219,14 @@ public class PreviewFragment extends Fragment {
         mTextureView.setTransform(matrix);
     }
 
-    public void drawHighlight(List<String> name, List<Float> x, List<Float> y, List<Float> size, double width, double height) {
+    public void drawHighlight(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
         final Activity activity = getActivity();
         if (activity != null) {
             activity.runOnUiThread(() -> {
                 if (x.get(0) != -1) {
-                    highlightFrameSize = new Size((int) width, (int) height);
+                    double width = Math.min(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                    double height = Math.max(mPreviewSize.getWidth(), mPreviewSize.getHeight());;
+                    highlightFrameSize = new Size((int) mPreviewSize.getWidth(), (int) mPreviewSize.getHeight());
 
                     Paint paint = new Paint();
                     paint.setColor(Color.BLUE);
@@ -234,6 +236,9 @@ public class PreviewFragment extends Fragment {
                     }
 
 
+
+                    System.out.println(width);
+                    System.out.println(height);
                     Bitmap mBmp = Bitmap.createBitmap((int) width, (int) height, Bitmap.Config.ARGB_8888);
                     Canvas canvas = new Canvas(mBmp);
                     mName.clear();
@@ -249,15 +254,15 @@ public class PreviewFragment extends Fragment {
                         mTop.add(y.get(i) - size.get(i));
 
 
-//                        Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
-//                        Rect rect3 = new Rect((int) 0, (int) height - 10, (int) (10), (int) (height));
-//                        Rect rect4 = new Rect((int) width - 10, (int) 0, (int) (width), (int) (10));
-//                        Rect rect5 = new Rect((int) width - 10, (int) height - 10, (int) (width), (int) (height));
+                        Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
+                        Rect rect3 = new Rect((int) 0, (int) height - 10, (int) (10), (int) (height));
+                        Rect rect4 = new Rect((int) width - 10, (int) 0, (int) (width), (int) (10));
+                        Rect rect5 = new Rect((int) width - 10, (int) height - 10, (int) (width), (int) (height));
 
-//                        canvas.drawRect(rect2, paint);
-//                        canvas.drawRect(rect3, paint);
-//                        canvas.drawRect(rect4, paint);
-//                        canvas.drawRect(rect5, paint);
+                        canvas.drawRect(rect2, paint);
+                        canvas.drawRect(rect3, paint);
+                        canvas.drawRect(rect4, paint);
+                        canvas.drawRect(rect5, paint);
                         Rect rect = new Rect(mLeft.get(i).intValue(), mTop.get(i).intValue(), mRight.get(i).intValue(), mBottom.get(i).intValue());
                         canvas.drawRect(rect, paint);
                         paint.setTextSize(size.get(i).floatValue());
@@ -287,6 +292,7 @@ public class PreviewFragment extends Fragment {
             });
         }
     }
+
 
     public interface StateCallback {
         void previewOnClicked(boolean isTargeting, String target);

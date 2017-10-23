@@ -75,6 +75,7 @@ public class IdentificationFragment extends Fragment {
     private Handler mHandler;
     private boolean mAttached;
     private int REQUEST_INTERVAL = 500;
+    private float mImagePreviewScale = 1;
     LoaderCallbackInterface mLoaderCallback = new LoaderCallbackInterface() {
         @Override
         public void onManagerConnected(int i) {
@@ -88,7 +89,7 @@ public class IdentificationFragment extends Fragment {
     };
     private StateCallback mStateCallback;
     //Use the time that sending the message as the id for pose
-    private HashMap<Long, Transform> mPoseMap;
+    private HashMap<Long, Transform> mPoseAPMap;
     private HashMap<Integer, List<Label>> mLabels;
     private int mRoomId;
     private Long mLastTime;
@@ -110,64 +111,67 @@ public class IdentificationFragment extends Fragment {
                             return;
                         }
 
-                        byte[] data = mLatestImageData;
+//                        byte[] data = mLatestImageData;
 //                        Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
 
-                        mRoomId = value.getDbId();
-                        Transform Plocal0 = mPoseMap.get(value.getRequestId());
-                        Transform Plocal0inv = Plocal0.inverse();
-                        mPoseMap.remove(value.getRequestId());
-                        Transform Plocal1 = mStateCallback.getPose();
-                        Transform Pmodel0 = getPoseFromMessage(value);
-                        Transform T = Pmodel0.multiply(Plocal0inv);
-                        Transform Pmodel1 = T.multiply(Plocal1);
+//                        mRoomId = value.getDbId();
+//                        Transform Plocal0 = mPoseAPMap.get(value.getRequestId());
+//                        Transform Plocal0inv = Plocal0.inverse();
+//                        mPoseAPMap.remove(value.getRequestId());
+//                        Transform Plocal1 = mStateCallback.getPoseAP();
+//                        Transform Pmodel0 = getPoseFromMessage(value);
+//                        Transform T = Pmodel0.multiply(Plocal0inv);
+//                        Transform Pmodel1 = T.multiply(Plocal1);
 
+
+                        Transform PoseMI = getPoseFromMessage(value);
+                        Transform PoseSI = getPoseSI();
+                        Transform PoseMS = PoseMI.multiply(PoseSI.inverse());
 
                         ArrayList<String> nameListOld = new ArrayList<>();
                         ArrayList<Float> XListOld = new ArrayList<>();
                         ArrayList<Float> YListOld = new ArrayList<>();
                         ArrayList<Float> SizeListOld = new ArrayList<>();
 
-                        visibility(Pmodel0, nameListOld, XListOld, YListOld, SizeListOld,  value.getAngle(),value.getWidth0(), value.getHeight0());
-                        rotateBack(XListOld,YListOld,value.getAngle(),(int)value.getWidth0(), (int)value.getHeight0());
+                        visibility(PoseMS, nameListOld, XListOld, YListOld, SizeListOld);
 
-                        System.out.println("Local visibility result:");
-                        for(int i = 0; i < nameListOld.size(); i++) {
-                            System.out.println(nameListOld.get(i) + " " + XListOld.get(i) + " " + YListOld.get(i));
-                        }
-                        System.out.println("Remote visibility result:");
-                        for(int i = 0; i < value.getItemsList().size(); i++) {
-                            SnapLinkProto.Item item = value.getItemsList().get(i);
-                            System.out.println(item.getName() + " " + item.getX() + " " + item.getY());
-                        }
+//                        System.out.println("Local visibility result:");
+//                        for(int i = 0; i < nameListOld.size(); i++) {
+//                            System.out.println(nameListOld.get(i) + " " + XListOld.get(i) + " " + YListOld.get(i));
+//                        }
+//                        System.out.println("Remote visibility result:");
+//                        for(int i = 0; i < value.getItemsList().size(); i++) {
+//                            SnapLinkProto.Item item = value.getItemsList().get(i);
+//                            System.out.println(item.getName() + " " + item.getX() + " " + item.getY());
+//                        }
+//
+//                        ArrayList<String> nameList = new ArrayList<>();
+//                        ArrayList<Float> XList = new ArrayList<>();
+//                        ArrayList<Float> YList = new ArrayList<>();
+//                        ArrayList<Float> SizeList = new ArrayList<>();
+//                        visibility(Pmodel1, nameList, XList, YList, SizeList, value.getAngle(),value.getWidth0(), value.getHeight0());
+//                        rotateBack(XList,YList,value.getAngle(),(int)value.getWidth0(), (int)value.getHeight0());
+//                        System.out.println("predicted visibility result:");
+//                        for(int i = 0; i < nameList.size(); i++) {
+//                            System.out.println(nameList.get(i) + " " + XList.get(i) + " " + YList.get(i));
+//                        }
 
-                        ArrayList<String> nameList = new ArrayList<>();
-                        ArrayList<Float> XList = new ArrayList<>();
-                        ArrayList<Float> YList = new ArrayList<>();
-                        ArrayList<Float> SizeList = new ArrayList<>();
-                        visibility(Pmodel1, nameList, XList, YList, SizeList, value.getAngle(),value.getWidth0(), value.getHeight0());
-                        rotateBack(XList,YList,value.getAngle(),(int)value.getWidth0(), (int)value.getHeight0());
-                        System.out.println("predicted visibility result:");
-                        for(int i = 0; i < nameList.size(); i++) {
-                            System.out.println(nameList.get(i) + " " + XList.get(i) + " " + YList.get(i));
-                        }
 
-
-                        String description = "";
-                        String title = String.valueOf(value.getRequestId());
-                        description += "id:" + title + "\n";
-                        description += "Old: \n";
-                        for (int i = 0; i < nameListOld.size(); i++) {
-                            description += nameListOld.get(i) + " " + XListOld.get(i) + " " + YListOld.get(i) + " ";
-                        }
-                        description += "\n";
-                        description += "New: \n";
-                        for (int i = 0; i < nameList.size(); i++) {
-                            description += nameList.get(i) + " " + XList.get(i) + " " + YList.get(i) + " ";
-                        }
-                        description += "\n";
-
-                        mDescriptions.add(description);
+//                        String description = "";
+//                        String title = String.valueOf(value.getRequestId());
+//                        description += "id:" + title + "\n";
+//                        description += "Old: \n";
+//                        for (int i = 0; i < nameListOld.size(); i++) {
+//                            description += nameListOld.get(i) + " " + XListOld.get(i) + " " + YListOld.get(i) + " ";
+//                        }
+//                        description += "\n";
+//                        description += "New: \n";
+//                        for (int i = 0; i < nameList.size(); i++) {
+//                            description += nameList.get(i) + " " + XList.get(i) + " " + YList.get(i) + " ";
+//                        }
+//                        description += "\n";
+//
+//                        mDescriptions.add(description);
 
 //                        FileOutputStream fos = null;
 //
@@ -189,7 +193,8 @@ public class IdentificationFragment extends Fragment {
 //                        MediaStore.Images.Media.insertImage(getActivity().getContentResolver(), bitmapImage, title , "");
 
 //                        mStateCallback.onObjectIdentified(value.getItemsList(), value.getWidth(), value.getHeight());
-                        mStateCallback.onObjectIdentified(nameList, XList, YList, SizeList, value.getWidth(), value.getHeight());
+                        mStateCallback.onObjectIdentified(nameListOld, XListOld, YListOld, SizeListOld);
+//                        mStateCallback.onObjectIdentified(nameList, XList, YList, SizeList, value.getWidth(), value.getHeight());
                     } catch (IllegalStateException e) {
                         //Do nothing
                         //To fix "Fragment ControlFragment{2dab555} not attached to Activity"
@@ -223,6 +228,7 @@ public class IdentificationFragment extends Fragment {
             System.out.println("ImageReader.OnImageAvailableListener");
             Long time = System.currentTimeMillis();
             Image image = reader.acquireLatestImage();
+
             ByteString data;
             if (image == null) {
                 return;
@@ -234,7 +240,7 @@ public class IdentificationFragment extends Fragment {
             data.copyTo(mLatestImageData, 0);
 
             if (time - mLastTime > REQUEST_INTERVAL) {
-                mPoseMap.put(time, mStateCallback.getPose());
+                mPoseAPMap.put(time, mStateCallback.getPoseAP());
                 Runnable senderRunnable = new Runnable() {
                     ByteString mData;
                     int mRotateClockwiseAngle;
@@ -297,12 +303,22 @@ public class IdentificationFragment extends Fragment {
 
 
         try {
+            int orientation = 1;
+            if(rotateClockwiseAngle == 90) {
+                orientation = 8;
+            } else if(rotateClockwiseAngle == 180) {
+                orientation = 3;
+            } else if(rotateClockwiseAngle == 270) {
+                orientation = 6;
+            } else {
+                orientation = 1;
+            }
 
             SnapLinkProto.LocalizationRequest request = SnapLinkProto.LocalizationRequest.newBuilder()
                     .setImage(data)
                     .setRequestId(messageId)
                     .setCamera(SnapLinkProto.CameraModel.newBuilder().setCx(mCx).setCy(mCy).setFx(mFx).setFy(mFy).build())
-                    .setOrientation(rotateClockwiseAngle)
+                    .setOrientation(orientation)
                     .build();
             mRequestObserver.onNext(request);
         } catch (RuntimeException e) {
@@ -346,6 +362,7 @@ public class IdentificationFragment extends Fragment {
         return mView;
     }
 
+
     @Override
     public void onViewCreated(final View view, Bundle savedInstanceState) {
         mTextView = (TextView) view.findViewById(R.id.textInIdentiFrag);
@@ -357,6 +374,8 @@ public class IdentificationFragment extends Fragment {
         mToast = Toast.makeText(getActivity(), "", Toast.LENGTH_SHORT);
         Camera camera = Camera.getInstance();
         Size captureSize = camera.getCaptureSize();
+        Size previewSize = camera.getPreviewSize();
+        mImagePreviewScale = (float)Math.min(captureSize.getWidth(), captureSize.getHeight())/(float)Math.min(previewSize.getWidth(), previewSize.getHeight());
         mImageReader = ImageReader.newInstance(captureSize.getWidth(), captureSize.getHeight(),
                 ImageFormat.JPEG, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(
@@ -377,7 +396,7 @@ public class IdentificationFragment extends Fragment {
 
         copyAllPreferenceValue();
 
-        mPoseMap = new HashMap<>();
+        mPoseAPMap = new HashMap<>();
         mLabels = new HashMap<>();
 
         try {
@@ -457,24 +476,24 @@ public class IdentificationFragment extends Fragment {
         camera.unregisterPreviewSurface(mImageReader.getSurface());
 
 
-        FileOutputStream logStream;
-
-        File logFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "/imu/pos.txt");
-        logFile.getParentFile().mkdirs();
-        try {
-            logFile.createNewFile();
-            boolean append = true;
-            logStream = new FileOutputStream(logFile, append);
-
-            for (int i = 0; i < mDescriptions.size(); i++) {
-                logStream.write(mDescriptions.get(i).getBytes());
-            }
-            logStream.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return;
-        }
-        mHandler.removeCallbacksAndMessages(null);
+//        FileOutputStream logStream;
+//
+//        File logFile = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "/imu/pos.txt");
+//        logFile.getParentFile().mkdirs();
+//        try {
+//            logFile.createNewFile();
+//            boolean append = true;
+//            logStream = new FileOutputStream(logFile, append);
+//
+//            for (int i = 0; i < mDescriptions.size(); i++) {
+//                logStream.write(mDescriptions.get(i).getBytes());
+//            }
+//            logStream.close();
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//            return;
+//        }
+//        mHandler.removeCallbacksAndMessages(null);
         super.onPause();
     }
 
@@ -495,12 +514,14 @@ public class IdentificationFragment extends Fragment {
         }
     }
 
-    private void visibility(Transform pose, List<String> nameList, List<Float> XList, List<Float> YList, List<Float> SizeList, double angle, double width0, double height0) {
+    private void visibility(Transform pose, List<String> nameList, List<Float> XList, List<Float> YList, List<Float> SizeList) {
         System.out.println("Inside visibility");
+        Size previewSize = Camera.getInstance().getPreviewSize();
+        float width = Math.min(previewSize.getWidth(),previewSize.getHeight());
+        float height = Math.max(previewSize.getWidth(),previewSize.getHeight());
         CameraModel camera = new CameraModel("CameraModel",
-                Camera.getInstance().getCaptureSize(),
-                mFx, mFy, mCx, mCy);
-        setIntrinsics(width0, height0, angle, camera);
+                new Size((int)width,(int)height),
+                mFx/mImagePreviewScale, mFy/mImagePreviewScale, Math.min(mCx,mCy)/mImagePreviewScale, Math.max(mCx,mCy)/mImagePreviewScale);
         if (mLabels.get(mRoomId).isEmpty()) {
             return;
         }
@@ -558,8 +579,6 @@ public class IdentificationFragment extends Fragment {
         }
 
         // find points in the image
-        int width = camera.getImageSize().getWidth();
-        int height = camera.getImageSize().getHeight();
         Point center = new Point(width / 2, height / 2);
         List<Point> points2 = planePoints.toList();
         Map<Float, Pair<String, Point>> resultMap = new HashMap<>();
@@ -598,54 +617,85 @@ public class IdentificationFragment extends Fragment {
     }
 
     public interface StateCallback {
-        void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size, double width, double height);
-        Transform getPose();
+        void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size);
+        Transform getPoseAP();
     }
 
-    private void rotateBack(List<Float> xList, List<Float> yList, double angle,
-                            int width, int height) {
-        for (int i = 0; i < xList.size(); i++) {
-            float oldX = xList.get(i);
-            float oldY = yList.get(i);
-            if (oldX == -1) {
-                continue;
-            }
-            if (angle == 90) {
-                // do nothing
-            } else if (angle == 180) {
-                xList.set(i, oldY);
-                yList.set(i, width - oldX);
-            } else if (angle == 270) {
-                xList.set(i, width - oldX);
-                yList.set(i, height - oldY);
-            } else {
-                // angle = 0
-                xList.set(i, height - oldY);
-                yList.set(i, oldX);
-            }
+//    private void rotateBack(List<Float> xList, List<Float> yList, double angle,
+//                            int width, int height) {
+//        for (int i = 0; i < xList.size(); i++) {
+//            float oldX = xList.get(i);
+//            float oldY = yList.get(i);
+//            if (oldX == -1) {
+//                continue;
+//            }
+//            if (angle == 90) {
+//                // do nothing
+//            } else if (angle == 180) {
+//                xList.set(i, oldY);
+//                yList.set(i, width - oldX);
+//            } else if (angle == 270) {
+//                xList.set(i, width - oldX);
+//                yList.set(i, height - oldY);
+//            } else {
+//                // angle = 0
+//                xList.set(i, height - oldY);
+//                yList.set(i, oldX);
+//            }
+//        }
+//    }
+//
+//    private void setIntrinsics(double width, double height, double angle, CameraModel model) {
+//        double oldCx = model.getCx();
+//        double oldCy = model.getCy();
+//        double newCx = 0;
+//        double newCy = 0;
+//        if (angle == 0) {
+//            newCx = oldCx;
+//            newCy = oldCy;
+//        } else if (angle == 90) {
+//            newCx = width - oldCy;
+//            newCy = oldCx;
+//        } else if (angle == 180) {
+//            newCx = width - oldCx;
+//            newCy = height - oldCy;
+//        } else if (angle == 270) {
+//            newCx = oldCy;
+//            newCy = height - oldCx;
+//        }
+//        model.setCx((float)newCx);
+//        model.setCy((float)newCy);
+//    }
+
+    private Transform getPoseSI() {
+        Camera camera = Camera.getInstance();
+        int deviceOrientation = camera.getDeviceOrientation();
+        if(deviceOrientation == 0) {
+            return new Transform(1,0,0,0,
+                                 0,1,0,0,
+                                 0,0,1,0);
+        } else if(deviceOrientation == 90) {
+            return new Transform(0,1,0,0,
+                                 -1,0,0,0,
+                                 0,0,1,0);
+        } else if(deviceOrientation == 180) {
+            return new Transform(-1,0,0,0,
+                                 0,-1,0,0,
+                                 0,0,1,0);
+        } else if(deviceOrientation == 270) {
+            return new Transform(0,-1,0,0,
+                                 1,0,0,0,
+                                 0,0,1,0);
+        } else {
+            throw new IllegalStateException("Rotation Angle is not multiple of 90");
         }
     }
 
-    private void setIntrinsics(double width, double height, double angle, CameraModel model) {
-        double oldCx = model.getCx();
-        double oldCy = model.getCy();
-        double newCx = 0;
-        double newCy = 0;
-        if (angle == 0) {
-            newCx = oldCx;
-            newCy = oldCy;
-        } else if (angle == 90) {
-            newCx = width - oldCy;
-            newCy = oldCx;
-        } else if (angle == 180) {
-            newCx = width - oldCx;
-            newCy = height - oldCy;
-        } else if (angle == 270) {
-            newCx = oldCy;
-            newCy = height - oldCx;
-        }
-        model.setCx((float)newCx);
-        model.setCy((float)newCy);
-
+    private Transform getPosePS() {
+        return new Transform(1,0,0,0,
+                             0,-1,0,0,
+                             0,0,-1,0);
     }
+
+
 }
