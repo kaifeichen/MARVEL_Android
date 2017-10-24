@@ -90,6 +90,7 @@ public class IdentificationFragment extends Fragment {
     private StateCallback mStateCallback;
     //Use the time that sending the message as the id for pose
     private HashMap<Long, Transform> mPoseAPMap;
+    private HashMap<Long, Transform> mPoseSIMap;
     private HashMap<Integer, List<Label>> mLabels;
     private int mRoomId;
     private Long mLastTime;
@@ -99,6 +100,7 @@ public class IdentificationFragment extends Fragment {
     private List<String> mRecentObjects;
     private List<String> mDescriptions = new ArrayList<>();
     private byte[] mLatestImageData;
+    Transform mPoseMA;
     StreamObserver<SnapLinkProto.LocalizationResponse> mResponseObserver = new StreamObserver<SnapLinkProto.LocalizationResponse>() {
         @Override
         public void onNext(SnapLinkProto.LocalizationResponse value) {
@@ -114,7 +116,7 @@ public class IdentificationFragment extends Fragment {
 //                        byte[] data = mLatestImageData;
 //                        Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
 
-//                        mRoomId = value.getDbId();
+//
 //                        Transform Plocal0 = mPoseAPMap.get(value.getRequestId());
 //                        Transform Plocal0inv = Plocal0.inverse();
 //                        mPoseAPMap.remove(value.getRequestId());
@@ -124,16 +126,20 @@ public class IdentificationFragment extends Fragment {
 //                        Transform Pmodel1 = T.multiply(Plocal1);
 
 
-                        Transform PoseMI = getPoseFromMessage(value);
-                        Transform PoseSI = getPoseSI();
-                        Transform PoseMS = PoseMI.multiply(PoseSI.inverse());
-
+                        mRoomId = value.getDbId();
+                        Transform PoseMI0 = getPoseFromMessage(value);
+                        Transform PoseSIinv0 = mPoseSIMap.remove(value.getRequestId()).inverse();
+                        Transform PoseAPinv0 = mPoseAPMap.remove(value.getRequestId()).inverse();
+                        Transform PosePSinv0 = getPosePS().inverse();
+                        mPoseMA = PoseMI0.multiply(PoseSIinv0).multiply(PosePSinv0).multiply(PoseAPinv0);
+                        Transform PoseAP1 = mStateCallback.getPoseAP();
+                        Transform PoseMS1 = mPoseMA.multiply(PoseAP1).multiply(getPosePS());
                         ArrayList<String> nameListOld = new ArrayList<>();
                         ArrayList<Float> XListOld = new ArrayList<>();
                         ArrayList<Float> YListOld = new ArrayList<>();
                         ArrayList<Float> SizeListOld = new ArrayList<>();
 
-                        visibility(PoseMS, nameListOld, XListOld, YListOld, SizeListOld);
+                        visibility(PoseMS1, nameListOld, XListOld, YListOld, SizeListOld);
 
 //                        System.out.println("Local visibility result:");
 //                        for(int i = 0; i < nameListOld.size(); i++) {
@@ -227,7 +233,28 @@ public class IdentificationFragment extends Fragment {
         if (mAttached) {
             System.out.println("ImageReader.OnImageAvailableListener");
             Long time = System.currentTimeMillis();
+
+            if(mPoseMA != null) {
+                Transform PoseAPN = mStateCallback.getPoseAP();
+                Transform PoseMSN = mPoseMA.multiply(PoseAPN).multiply(getPosePS());
+                ArrayList<String> nameList = new ArrayList<>();
+                ArrayList<Float> XList = new ArrayList<>();
+                ArrayList<Float> YList = new ArrayList<>();
+                ArrayList<Float> SizeList = new ArrayList<>();
+                visibility(PoseMSN, nameList, XList, YList, SizeList);
+                mStateCallback.onObjectIdentified(nameList,XList,YList,SizeList);
+            }
+
             Image image = reader.acquireLatestImage();
+
+            if (time - mLastTime < REQUEST_INTERVAL) {
+                try{
+                    image.close();
+                } catch (NullPointerException e) {
+
+                }
+                return;
+            }
 
             ByteString data;
             if (image == null) {
@@ -241,6 +268,7 @@ public class IdentificationFragment extends Fragment {
 
             if (time - mLastTime > REQUEST_INTERVAL) {
                 mPoseAPMap.put(time, mStateCallback.getPoseAP());
+                mPoseSIMap.put(time, getPoseSI());
                 Runnable senderRunnable = new Runnable() {
                     ByteString mData;
                     int mRotateClockwiseAngle;
@@ -397,6 +425,7 @@ public class IdentificationFragment extends Fragment {
         copyAllPreferenceValue();
 
         mPoseAPMap = new HashMap<>();
+        mPoseSIMap = new HashMap<>();
         mLabels = new HashMap<>();
 
         try {
