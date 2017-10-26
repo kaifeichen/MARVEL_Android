@@ -1,5 +1,6 @@
 package edu.berkeley.cs.sdb.cellmate;
 
+import edu.berkeley.cs.sdb.cellmate.algo.Localizer.LocTracker;
 import edu.berkeley.cs.sdb.snaplink.*;
 import android.app.Activity;
 import android.app.Fragment;
@@ -56,7 +57,7 @@ import static org.opencv.calib3d.Calib3d.Rodrigues;
 import static org.opencv.calib3d.Calib3d.projectPoints;
 import static org.opencv.core.CvType.CV_64FC1;
 
-public class IdentificationFragment extends Fragment {
+public class IdentificationFragment extends Fragment implements LocTracker.StateCallback {
     private static final String LOG_TAG = "CellMate";
     private static final String CONTROL_TOPIC_PREFIX = "410.dev/plugctl/front/s.powerup.v0/";
     private static final String CONTROL_TOPIC_SUFFIX = "/i.binact/slot/state";
@@ -88,9 +89,7 @@ public class IdentificationFragment extends Fragment {
         }
     };
     private StateCallback mStateCallback;
-    //Use the time that sending the message as the id for pose
-    private HashMap<Long, Transform> mPoseAPMap;
-    private HashMap<Long, Transform> mPoseSIMap;
+
     private HashMap<Integer, List<Label>> mLabels;
     private int mRoomId;
     private Long mLastTime;
@@ -100,7 +99,13 @@ public class IdentificationFragment extends Fragment {
     private List<String> mRecentObjects;
     private List<String> mDescriptions = new ArrayList<>();
     private byte[] mLatestImageData;
-    Transform mPoseMA;
+
+    long mCurrentPoseMATime;
+    Transform mCurrentPoseMA;
+
+
+    HashMap<Long, Poses> mPosesMap;
+
     StreamObserver<SnapLinkProto.LocalizationResponse> mResponseObserver = new StreamObserver<SnapLinkProto.LocalizationResponse>() {
         @Override
         public void onNext(SnapLinkProto.LocalizationResponse value) {
@@ -116,30 +121,45 @@ public class IdentificationFragment extends Fragment {
 //                        byte[] data = mLatestImageData;
 //                        Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
 
-//
-//                        Transform Plocal0 = mPoseAPMap.get(value.getRequestId());
-//                        Transform Plocal0inv = Plocal0.inverse();
-//                        mPoseAPMap.remove(value.getRequestId());
-//                        Transform Plocal1 = mStateCallback.getPoseAP();
-//                        Transform Pmodel0 = getPoseFromMessage(value);
-//                        Transform T = Pmodel0.multiply(Plocal0inv);
-//                        Transform Pmodel1 = T.multiply(Plocal1);
 
 
-                        mRoomId = value.getDbId();
-                        Transform PoseMI0 = getPoseFromMessage(value);
-                        Transform PoseSIinv0 = mPoseSIMap.remove(value.getRequestId()).inverse();
-                        Transform PoseAPinv0 = mPoseAPMap.remove(value.getRequestId()).inverse();
-                        Transform PosePSinv0 = getPosePS().inverse();
-                        mPoseMA = PoseMI0.multiply(PoseSIinv0).multiply(PosePSinv0).multiply(PoseAPinv0);
-                        Transform PoseAP1 = mStateCallback.getPoseAP();
-                        Transform PoseMS1 = mPoseMA.multiply(PoseAP1).multiply(getPosePS());
+                        Transform currentPoseMS = null;
+                        if(value.getRequestId() > mCurrentPoseMATime) {
+                            Transform PoseMI = getPoseFromMessage(value);
+                            Poses poses = mPosesMap.get(value.getRequestId());
+                            poses.PoseMI = PoseMI;
+                            Transform PoseSIinv = poses.PoseSI.inverse();
+                            Transform PoseAPinv = poses.PoseAP.inverse();
+                            Transform PosePSinv = getPosePS().inverse();
+                            Long oldPoseMATime = mCurrentPoseMATime;
+                            mCurrentPoseMATime = value.getRequestId();
+                            mCurrentPoseMA = PoseMI.multiply(PoseSIinv).multiply(PosePSinv).multiply(PoseAPinv);
+                            Transform currentPoseAP = mStateCallback.getLatestPoseAndTime().pose;
+                            currentPoseMS = mCurrentPoseMA.multiply(currentPoseAP).multiply(getPosePS());
+                            if(poses.PoseAPCorected) {
+                                //remove this query event poses if it is corrected by LocTracker already
+                                mPosesMap.remove(value.getRequestId());
+                            }
+                            if(mPosesMap.containsKey(oldPoseMATime)) {
+                                //remove old query event poses since it is no longer meaningful, given that we have a newer one
+                                mPosesMap.remove(oldPoseMATime);
+                            }
+                        } else {
+                            //remove this query event poses if it is outdated
+                            mPosesMap.remove(value.getRequestId());
+                        }
+
+
+
                         ArrayList<String> nameListOld = new ArrayList<>();
                         ArrayList<Float> XListOld = new ArrayList<>();
                         ArrayList<Float> YListOld = new ArrayList<>();
                         ArrayList<Float> SizeListOld = new ArrayList<>();
 
-                        visibility(PoseMS1, nameListOld, XListOld, YListOld, SizeListOld);
+
+
+                        mRoomId = value.getDbId();
+                        visibility(currentPoseMS, nameListOld, XListOld, YListOld, SizeListOld);
 
 //                        System.out.println("Local visibility result:");
 //                        for(int i = 0; i < nameListOld.size(); i++) {
@@ -234,14 +254,14 @@ public class IdentificationFragment extends Fragment {
             System.out.println("ImageReader.OnImageAvailableListener");
             Long time = System.currentTimeMillis();
 
-            if(mPoseMA != null) {
-                Transform PoseAPN = mStateCallback.getPoseAP();
-                Transform PoseMSN = mPoseMA.multiply(PoseAPN).multiply(getPosePS());
+            if(mCurrentPoseMA != null) {
+                Transform currentPoseAP = mStateCallback.getLatestPoseAndTime().pose;
+                Transform currentPoseMS = mCurrentPoseMA.multiply(currentPoseAP).multiply(getPosePS());
                 ArrayList<String> nameList = new ArrayList<>();
                 ArrayList<Float> XList = new ArrayList<>();
                 ArrayList<Float> YList = new ArrayList<>();
                 ArrayList<Float> SizeList = new ArrayList<>();
-                visibility(PoseMSN, nameList, XList, YList, SizeList);
+                visibility(currentPoseMS, nameList, XList, YList, SizeList);
                 mStateCallback.onObjectIdentified(nameList,XList,YList,SizeList);
             }
 
@@ -267,8 +287,8 @@ public class IdentificationFragment extends Fragment {
             data.copyTo(mLatestImageData, 0);
 
             if (time - mLastTime > REQUEST_INTERVAL) {
-                mPoseAPMap.put(time, mStateCallback.getPoseAP());
-                mPoseSIMap.put(time, getPoseSI());
+                LocTracker.ImuPose latestPoseAP = mStateCallback.getLatestPoseAndTime();
+                mPosesMap.put(latestPoseAP.time, new Poses(false,latestPoseAP.pose,null,getPoseSI()));
                 Runnable senderRunnable = new Runnable() {
                     ByteString mData;
                     int mRotateClockwiseAngle;
@@ -424,8 +444,7 @@ public class IdentificationFragment extends Fragment {
 
         copyAllPreferenceValue();
 
-        mPoseAPMap = new HashMap<>();
-        mPoseSIMap = new HashMap<>();
+        mPosesMap = new HashMap<>();
         mLabels = new HashMap<>();
 
         try {
@@ -647,54 +666,9 @@ public class IdentificationFragment extends Fragment {
 
     public interface StateCallback {
         void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size);
-        Transform getPoseAP();
+        LocTracker.ImuPose getLatestPoseAndTime();
     }
 
-//    private void rotateBack(List<Float> xList, List<Float> yList, double angle,
-//                            int width, int height) {
-//        for (int i = 0; i < xList.size(); i++) {
-//            float oldX = xList.get(i);
-//            float oldY = yList.get(i);
-//            if (oldX == -1) {
-//                continue;
-//            }
-//            if (angle == 90) {
-//                // do nothing
-//            } else if (angle == 180) {
-//                xList.set(i, oldY);
-//                yList.set(i, width - oldX);
-//            } else if (angle == 270) {
-//                xList.set(i, width - oldX);
-//                yList.set(i, height - oldY);
-//            } else {
-//                // angle = 0
-//                xList.set(i, height - oldY);
-//                yList.set(i, oldX);
-//            }
-//        }
-//    }
-//
-//    private void setIntrinsics(double width, double height, double angle, CameraModel model) {
-//        double oldCx = model.getCx();
-//        double oldCy = model.getCy();
-//        double newCx = 0;
-//        double newCy = 0;
-//        if (angle == 0) {
-//            newCx = oldCx;
-//            newCy = oldCy;
-//        } else if (angle == 90) {
-//            newCx = width - oldCy;
-//            newCy = oldCx;
-//        } else if (angle == 180) {
-//            newCx = width - oldCx;
-//            newCy = height - oldCy;
-//        } else if (angle == 270) {
-//            newCx = oldCy;
-//            newCy = height - oldCx;
-//        }
-//        model.setCx((float)newCx);
-//        model.setCy((float)newCy);
-//    }
 
     private Transform getPoseSI() {
         Camera camera = Camera.getInstance();
@@ -725,6 +699,49 @@ public class IdentificationFragment extends Fragment {
                              0,-1,0,0,
                              0,0,-1,0);
     }
+
+    //A tuple class that contains(TimeStamp t, PoseAP from LocTracker at TimeStamp t, PoseMI from server with the image at TimeStamp t)
+    private class Poses {
+        boolean PoseAPCorected;
+        public Transform PoseAP;
+        public Transform PoseMI;
+        public Transform PoseSI;
+
+        public Poses(boolean poseAPCorected, Transform poseAP, Transform poseMI, Transform poseSI) {
+            PoseAPCorected = poseAPCorected;
+            PoseAP = poseAP;
+            PoseMI = poseMI;
+            PoseSI = poseSI;
+        }
+    }
+
+    @Override
+    public void onStancePhaseCorrection(List<LocTracker.ImuPose> posesRecord) {
+        List<Long> removingEntries = new LinkedList<>();
+        for(LocTracker.ImuPose node : posesRecord) {
+            if(mPosesMap.keySet().contains(node.time)) {
+                Poses poses = mPosesMap.get(node.time);
+                poses.PoseAP = node.pose;
+                poses.PoseAPCorected = true;
+                if(poses.PoseMI != null) {
+                    if(node.time > mCurrentPoseMATime) {
+                        Transform PoseSIinv0 = poses.PoseSI.inverse();
+                        Transform PoseAPinv = poses.PoseAP.inverse();
+                        Transform PosePSinv0 = getPosePS().inverse();
+                        mCurrentPoseMATime = node.time;
+                        mCurrentPoseMA = poses.PoseMI.multiply(PoseSIinv0).multiply(PosePSinv0).multiply(PoseAPinv);
+                    }
+                    removingEntries.add(node.time);
+                }
+            }
+        }
+        for(long entry : removingEntries) {
+            mPosesMap.remove(entry);
+        }
+    }
+
+
+
 
 
 }

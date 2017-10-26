@@ -48,6 +48,16 @@ public class Transform {
 
     }
 
+    public void setX(float x){
+        mData[12] = x;
+    }
+    public void setY(float y){
+        mData[13] = y;
+    }
+    public void setZ(float z){
+        mData[14] = z;
+    }
+
 
     public float r11() {
         return mData[0];

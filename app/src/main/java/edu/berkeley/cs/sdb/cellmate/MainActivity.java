@@ -77,6 +77,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
 
 
+
+
     @Override
     public void previewOnClicked(boolean isTargeting, String target) {
         if (mMode == Mode.CALIBRATION) {
@@ -159,6 +161,13 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
         setContentView(R.layout.main_activity);
 
+        //LocTracker need to be create before fragments because Identification fragment need data froms LocTracker
+        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+        mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
+        mRotationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);
+
+        mLocTracker = new LocTracker();
+
 
 //        this.getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
@@ -179,12 +188,6 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             createDefaultFragments(savedInstanceState);
         }
 
-
-        mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
-        mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
-        mRotationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);
-
-        mLocTracker = new LocTracker();
         System.out.println("OnCreate done");
     }
 
@@ -202,6 +205,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
             IdentificationFragment identificationFragment = IdentificationFragment.newInstance();
             getFragmentManager().beginTransaction().replace(R.id.identification_fragment, identificationFragment).commit();
+            mLocTracker.setStateCallback(identificationFragment);
 
             mMode = Mode.CONTROL;
 
@@ -285,8 +289,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         }
     }
 
-    public Transform getPoseAP() {
-        return mLocTracker.getPose();
+    public LocTracker.ImuPose getLatestPoseAndTime() {
+        return mLocTracker.getLatestPoseAndTime();
     }
 
     public enum PermissionState {
