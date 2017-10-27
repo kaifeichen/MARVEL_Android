@@ -262,7 +262,14 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                 ArrayList<Float> YList = new ArrayList<>();
                 ArrayList<Float> SizeList = new ArrayList<>();
                 visibility(currentPoseMS, nameList, XList, YList, SizeList);
-                mStateCallback.onObjectIdentified(nameList,XList,YList,SizeList);
+                Runnable drawingRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        mStateCallback.onObjectIdentified(nameList,XList,YList,SizeList);
+                    }
+                };
+                mHandler.post(drawingRunnable);
+
             }
 
             Image image = reader.acquireLatestImage();
@@ -289,25 +296,16 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             if (time - mLastTime > REQUEST_INTERVAL) {
                 LocTracker.ImuPose latestPoseAP = mStateCallback.getLatestPoseAndTime();
                 mPosesMap.put(latestPoseAP.time, new Poses(false,latestPoseAP.pose,null,getPoseSI()));
+                Camera camera = Camera.getInstance();
+                int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
                 Runnable senderRunnable = new Runnable() {
-                    ByteString mData;
-                    int mRotateClockwiseAngle;
-
                     @Override
                     public void run() {
-                        sendRequestToServer(mData, mRotateClockwiseAngle, time);
-                    }
+                        sendRequestToServer(data, rotateClockwiseAngle, time);
 
-                    public Runnable init(ByteString data) {
-                        mData = data;
-                        Camera camera = Camera.getInstance();
-                        //Angles the data image need to rotate right to have the correct direction
-                        mRotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
-                        return (this);
                     }
-                }.init(data);
+                };
                 mHandler.post(senderRunnable);
-                //sendRequestToServer(data);
                 mLastTime = time;
             } else {
                 try {
@@ -332,7 +330,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                              matrix.getData(8), matrix.getData(9), matrix.getData(10), matrix.getData(11));
     }
 
-    private void sendRequestToServer(ByteString data, int rotateClockwiseAngle, long messageId) {
+    private void  sendRequestToServer(ByteString data, int rotateClockwiseAngle, long messageId) {
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
         float Fx = Float.parseFloat(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
@@ -739,9 +737,4 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             mPosesMap.remove(entry);
         }
     }
-
-
-
-
-
 }
