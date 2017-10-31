@@ -6,6 +6,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
+import android.os.SystemClock;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -34,16 +35,20 @@ public class LocTracker implements SensorEventListener {
 
     StateCallback mStateCallback = null;
     private List<ImuPose> posesRecord;
+    private List<ImuPose> posesRecordRemoved;
 
 
 
     public LocTracker() {
         posesRecord = new ArrayList<>();
+        posesRecordRemoved = new ArrayList<>();
         mTimestamps = new ArrayList<>();
         mLinearAccs = new ArrayList<>();
         mVelocities = new ArrayList<>();
         mPositions = new ArrayList<>();
         mPosition = new float[3];
+        mRotVec = new float[4];
+        mRotMat = new float[9];
 
         reset();
     }
@@ -72,7 +77,7 @@ public class LocTracker implements SensorEventListener {
         }
 
         if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
-            Long time = System.nanoTime();
+            Long time = System.currentTimeMillis();
             // Android reuses events, so you probably want a copy
             System.arraycopy(event.values, 0, mLinearAcc, 0, event.values.length);
 
@@ -86,8 +91,7 @@ public class LocTracker implements SensorEventListener {
             }
 
             mLinearAccs.add(mLinearAcc);
-
-            updateIMU();
+            updateIMU(event.timestamp);
         } else if (event.sensor.getType() == Sensor.TYPE_GAME_ROTATION_VECTOR) {
             // Android reuses events, so you probably want a copy
             System.arraycopy(event.values, 0, mRotVec, 0, event.values.length);
@@ -121,22 +125,47 @@ public class LocTracker implements SensorEventListener {
         mTimestamps.clear();
         mLinearAccs.clear();
         mVelocities.clear();
+        posesRecordRemoved.addAll(posesRecord);
         posesRecord.clear();
 
         mLinearAcc = new float[4];
-        mRotVec = new float[4];
-        mRotMat = new float[9];
 
         float[] velocitiy = new float[4];
-        mTimestamps.add(System.nanoTime());
+        mTimestamps.add(System.currentTimeMillis());
         mLinearAccs.add(mLinearAcc);
         mVelocities.add(velocitiy);
-        ImuPose currentPose = new ImuPose(System.currentTimeMillis(),
+        ImuPose currentPose = new ImuPose(SystemClock.elapsedRealtimeNanos(),
                 new Transform(mRotMat[0],mRotMat[1],mRotMat[2],mPosition[0],
                               mRotMat[3],mRotMat[4],mRotMat[5],mPosition[1],
                               mRotMat[6],mRotMat[7],mRotMat[8],mPosition[2]));
         posesRecord.add(currentPose);
         zeroCount = 0;
+    }
+
+    public ImuPose getNearestPoseAndTime(long time) {
+        List<ImuPose> removingPoses = new ArrayList<>();
+        ImuPose result = null;
+        for(int i = 0; i < posesRecordRemoved.size(); i++) {
+            if(posesRecordRemoved.get(i).time < time) {
+                removingPoses.add(posesRecordRemoved.get(i));
+            } else {
+                result = posesRecordRemoved.get(i);
+                break;
+            }
+        }
+        for(ImuPose pose : removingPoses) {
+            posesRecordRemoved.remove(pose);
+        }
+        removingPoses.clear();
+        if(result != null) {
+            return result;
+        }
+        for(int i = 0; i < posesRecord.size(); i++) {
+            if(posesRecord.get(i).time >= time) {
+                return posesRecord.get(i);
+            }
+        }
+        return posesRecord.get(posesRecord.size()-1);
     }
 
     public ImuPose getLatestPoseAndTime() {
@@ -174,7 +203,7 @@ public class LocTracker implements SensorEventListener {
         }
     }
 
-    private void updateIMU() {
+    private void updateIMU(long eventTime) {
         if (inStancePhase()) {
             doCorrection();
             reset();
@@ -200,8 +229,7 @@ public class LocTracker implements SensorEventListener {
         Transform currentPose = new Transform(mRotMat[0],mRotMat[1],mRotMat[2],mPosition[0],
                                               mRotMat[3],mRotMat[4],mRotMat[5],mPosition[1],
                                               mRotMat[6],mRotMat[7],mRotMat[8],mPosition[2]);
-        posesRecord.add(new ImuPose(System.currentTimeMillis(), currentPose));
-
+        posesRecord.add(new ImuPose(eventTime, currentPose));
     }
 
     private boolean inStancePhase() {

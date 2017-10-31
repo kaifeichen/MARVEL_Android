@@ -14,6 +14,7 @@ import android.media.ImageReader;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.preference.PreferenceManager;
 import android.util.Log;
 import android.util.Pair;
@@ -117,12 +118,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                         if(!value.getSuccess()) {
                             return;
                         }
-
 //                        byte[] data = mLatestImageData;
 //                        Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
-
-
-
                         Transform currentPoseMS = null;
                         if(value.getRequestId() > mCurrentPoseMATime) {
                             Transform PoseMI = getPoseFromMessage(value);
@@ -136,6 +133,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                             mCurrentPoseMA = PoseMI.multiply(PoseSIinv).multiply(PosePSinv).multiply(PoseAPinv);
                             Transform currentPoseAP = mStateCallback.getLatestPoseAndTime().pose;
                             currentPoseMS = mCurrentPoseMA.multiply(currentPoseAP).multiply(getPosePS());
+
                             if(poses.PoseAPCorected) {
                                 //remove this query event poses if it is corrected by LocTracker already
                                 mPosesMap.remove(value.getRequestId());
@@ -149,13 +147,10 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                             mPosesMap.remove(value.getRequestId());
                         }
 
-
-
                         ArrayList<String> nameListOld = new ArrayList<>();
                         ArrayList<Float> XListOld = new ArrayList<>();
                         ArrayList<Float> YListOld = new ArrayList<>();
                         ArrayList<Float> SizeListOld = new ArrayList<>();
-
 
 
                         mRoomId = value.getDbId();
@@ -219,6 +214,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 //                        MediaStore.Images.Media.insertImage(getActivity().getContentResolver(), bitmapImage, title , "");
 
 //                        mStateCallback.onObjectIdentified(value.getItemsList(), value.getWidth(), value.getHeight());
+                        nameListOld.add("red");
                         mStateCallback.onObjectIdentified(nameListOld, XListOld, YListOld, SizeListOld);
 //                        mStateCallback.onObjectIdentified(nameList, XList, YList, SizeList, value.getWidth(), value.getHeight());
                     } catch (IllegalStateException e) {
@@ -250,6 +246,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         }
     };
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
+        long imageAvailableTime = SystemClock.elapsedRealtimeNanos();
         if (mAttached) {
             System.out.println("ImageReader.OnImageAvailableListener");
             Long time = System.currentTimeMillis();
@@ -288,20 +285,23 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                 return;
             }
 
+            long imageGeneratedTime = image.getTimestamp();
+
+
             data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
             image.close();
             mLatestImageData = new byte[data.size()];
             data.copyTo(mLatestImageData, 0);
 
             if (time - mLastTime > REQUEST_INTERVAL) {
-                LocTracker.ImuPose latestPoseAP = mStateCallback.getLatestPoseAndTime();
+                LocTracker.ImuPose latestPoseAP = mStateCallback.getNearestPoseAndTime(imageGeneratedTime);
                 mPosesMap.put(latestPoseAP.time, new Poses(false,latestPoseAP.pose,null,getPoseSI()));
                 Camera camera = Camera.getInstance();
                 int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
                 Runnable senderRunnable = new Runnable() {
                     @Override
                     public void run() {
-                        sendRequestToServer(data, rotateClockwiseAngle, time);
+                        sendRequestToServer(data, rotateClockwiseAngle, latestPoseAP.time);
 
                     }
                 };
@@ -586,7 +586,6 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         // image coordinate
         Transform poseInCamera = pose.inverse();
         Mat R = new Mat(3, 3, CV_64FC1);
-        System.out.println("3");
         R.put(0, 0, new double[]{poseInCamera.r11()});
         R.put(0, 1, new double[]{poseInCamera.r12()});
         R.put(0, 2, new double[]{poseInCamera.r13()});
@@ -608,21 +607,21 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
 
 
-        poseInCamera.print();
-        double[] data = new double[3];
-        rvec.get(0,0,data);
-        System.out.println("rvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
-        tvec.get(0,0,data);
-        System.out.println("tvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
-        float[] dataF = new float[9];
-        K.get(0,0,dataF);
-        System.out.println("K: " + " " + dataF[0] + " " + dataF[1] + " " + dataF[2] + "\n "
-                + dataF[3] + " " + dataF[4] + " " + dataF[5] + "\n "
-                + dataF[6] + " " + dataF[7] + " " + dataF[8] + "\n ");
+//        poseInCamera.print();
+//        double[] data = new double[3];
+//        rvec.get(0,0,data);
+//        System.out.println("rvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
+//        tvec.get(0,0,data);
+//        System.out.println("tvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
+//        float[] dataF = new float[9];
+//        K.get(0,0,dataF);
+//        System.out.println("K: " + " " + dataF[0] + " " + dataF[1] + " " + dataF[2] + "\n "
+//                + dataF[3] + " " + dataF[4] + " " + dataF[5] + "\n "
+//                + dataF[6] + " " + dataF[7] + " " + dataF[8] + "\n ");
         List<Point3> pointsList = objectPoints.toList();
-        for(int i = 0; i < pointsList.size(); i++) {
-            System.out.println(names.get(i) + " " + pointsList.get(i).toString());
-        }
+//        for(int i = 0; i < pointsList.size(); i++) {
+//            System.out.println(names.get(i) + " " + pointsList.get(i).toString());
+//        }
 
         // find points in the image
         Point center = new Point(width / 2, height / 2);
@@ -664,6 +663,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
     public interface StateCallback {
         void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size);
+        LocTracker.ImuPose getNearestPoseAndTime(long time);
         LocTracker.ImuPose getLatestPoseAndTime();
     }
 
