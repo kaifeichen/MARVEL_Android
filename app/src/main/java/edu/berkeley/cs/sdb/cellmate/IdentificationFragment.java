@@ -1,6 +1,7 @@
 package edu.berkeley.cs.sdb.cellmate;
 
 import edu.berkeley.cs.sdb.cellmate.algo.Localizer.LocTracker;
+import edu.berkeley.cs.sdb.cellmate.data.KeyFrame;
 import edu.berkeley.cs.sdb.snaplink.*;
 import android.app.Activity;
 import android.app.Fragment;
@@ -100,6 +101,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     private List<String> mRecentObjects;
     private List<String> mDescriptions = new ArrayList<>();
     private byte[] mLatestImageData;
+    private List<KeyFrame> mFrameCache = new ArrayList<>();
+    private int mFrameCacheLimit = 10;
 
     long mCurrentPoseMATime;
     Transform mCurrentPoseMA;
@@ -246,7 +249,6 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         }
     };
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
-        long imageAvailableTime = SystemClock.elapsedRealtimeNanos();
         if (mAttached) {
             System.out.println("ImageReader.OnImageAvailableListener");
             Long time = System.currentTimeMillis();
@@ -271,14 +273,14 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
             Image image = reader.acquireLatestImage();
 
-            if (time - mLastTime < REQUEST_INTERVAL) {
-                try{
-                    image.close();
-                } catch (NullPointerException e) {
-
-                }
-                return;
-            }
+//            if (time - mLastTime < REQUEST_INTERVAL) {
+//                try{
+//                    image.close();
+//                } catch (NullPointerException e) {
+//
+//                }
+//                return;
+//            }
 
             ByteString data;
             if (image == null) {
@@ -286,22 +288,28 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             }
 
             long imageGeneratedTime = image.getTimestamp();
-
-
             data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
             image.close();
             mLatestImageData = new byte[data.size()];
             data.copyTo(mLatestImageData, 0);
+            mFrameCache.add(new KeyFrame(imageGeneratedTime,
+                                         mStateCallback.getNearestPoseAndTime(imageGeneratedTime).pose,
+                                         0,
+                                         mLatestImageData));
+            if(mFrameCache.size() > mFrameCacheLimit) {
+                mFrameCache.remove(0);
+            }
 
             if (time - mLastTime > REQUEST_INTERVAL) {
-                LocTracker.ImuPose latestPoseAP = mStateCallback.getNearestPoseAndTime(imageGeneratedTime);
-                mPosesMap.put(latestPoseAP.time, new Poses(false,latestPoseAP.pose,null,getPoseSI()));
+                KeyFrame frameToSend = bestFrameToSend();
+                Transform pose = frameToSend.getPose();
+                mPosesMap.put(frameToSend.getTime(), new Poses(false,pose,null,getPoseSI()));
                 Camera camera = Camera.getInstance();
                 int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
                 Runnable senderRunnable = new Runnable() {
                     @Override
                     public void run() {
-                        sendRequestToServer(data, rotateClockwiseAngle, latestPoseAP.time);
+                        sendRequestToServer(data, rotateClockwiseAngle, frameToSend.getTime());
 
                     }
                 };
@@ -317,6 +325,10 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             }
         }
     };
+
+    private KeyFrame bestFrameToSend() {
+        return mFrameCache.get(mFrameCache.size()-1);
+    }
     private View mView;
 
     public static IdentificationFragment newInstance() {
@@ -504,9 +516,6 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         } else {
             mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
         }
-
-
-
     }
 
     @Override
