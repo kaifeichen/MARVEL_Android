@@ -1,7 +1,6 @@
 package edu.berkeley.cs.sdb.cellmate.algo.Localizer;
 
 import android.app.Fragment;
-import android.content.Context;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
@@ -9,7 +8,6 @@ import android.hardware.SensorManager;
 import android.os.SystemClock;
 
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 
 import edu.berkeley.cs.sdb.cellmate.data.Transform;
@@ -24,8 +22,8 @@ public class LocTracker implements SensorEventListener {
 
     private List<Long> mTimestamps;
     private List<float[]> mLinearAccs;
-    private float[] mLinearAcc;
     private float[] mRotVec;
+    private float[] mGyro;
     private float[] mRotMat;
     private List<float[]> mVelocities;
     private List<float[]> mPositions;
@@ -49,6 +47,7 @@ public class LocTracker implements SensorEventListener {
         mPosition = new float[3];
         mRotVec = new float[4];
         mRotMat = new float[9];
+        mGyro = new float[4];
 
         reset();
     }
@@ -77,8 +76,9 @@ public class LocTracker implements SensorEventListener {
         }
 
         if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
-            Long time = System.currentTimeMillis();
+            Long time = SystemClock.elapsedRealtimeNanos();
             // Android reuses events, so you probably want a copy
+            float[] mLinearAcc = new float[4];
             System.arraycopy(event.values, 0, mLinearAcc, 0, event.values.length);
 
             mTimestamps.add(time);
@@ -90,6 +90,8 @@ public class LocTracker implements SensorEventListener {
                 }
             }
 
+            float[] lastAcc = mLinearAccs.get(0);
+            System.out.println("lastAcc" + lastAcc[0]);
             mLinearAccs.add(mLinearAcc);
             updateIMU(event.timestamp);
         } else if (event.sensor.getType() == Sensor.TYPE_GAME_ROTATION_VECTOR) {
@@ -97,15 +99,19 @@ public class LocTracker implements SensorEventListener {
             System.arraycopy(event.values, 0, mRotVec, 0, event.values.length);
 
             SensorManager.getRotationMatrixFromVector(mRotMat, mRotVec);
+        } else if (event.sensor.getType() == Sensor.TYPE_GYROSCOPE) {
+            System.arraycopy(event.values, 0, mGyro, 0, 3);
         }
     }
 
     public class ImuPose {
         public long time;
         public Transform pose;
-        public ImuPose(long t, Transform p) {
+        public float[] gyroReading;
+        public ImuPose(long t, Transform p, float[] g) {
             time = t;
             pose = p;
+            gyroReading = g;
         }
         public float[] getPosition() {
             float[] position = new float[3];
@@ -128,16 +134,20 @@ public class LocTracker implements SensorEventListener {
         posesRecordRemoved.addAll(posesRecord);
         posesRecord.clear();
 
-        mLinearAcc = new float[4];
-
+        float[] mLinearAcc = new float[4];
         float[] velocitiy = new float[4];
-        mTimestamps.add(System.currentTimeMillis());
+        mTimestamps.add(SystemClock.elapsedRealtimeNanos());
         mLinearAccs.add(mLinearAcc);
+
+
         mVelocities.add(velocitiy);
+        float[] gyro = new float[3];
+        System.arraycopy(mGyro, 0, gyro, 0, 3);
         ImuPose currentPose = new ImuPose(SystemClock.elapsedRealtimeNanos(),
-                new Transform(mRotMat[0],mRotMat[1],mRotMat[2],mPosition[0],
-                              mRotMat[3],mRotMat[4],mRotMat[5],mPosition[1],
-                              mRotMat[6],mRotMat[7],mRotMat[8],mPosition[2]));
+                                        new Transform(mRotMat[0],mRotMat[1],mRotMat[2],mPosition[0],
+                                                      mRotMat[3],mRotMat[4],mRotMat[5],mPosition[1],
+                                                      mRotMat[6],mRotMat[7],mRotMat[8],mPosition[2]),
+                                        gyro);
         posesRecord.add(currentPose);
         zeroCount = 0;
     }
@@ -174,19 +184,26 @@ public class LocTracker implements SensorEventListener {
 
     private void doCorrection() {
         int residualPos = mLinearAccs.size() - STANCE_THRES - 1;
+        int stancePhaseStartPos = 0;
+        for(int i = 0; i < residualPos; i++) {
+            if(mLinearAccs.get(i)[0] == 0.0f) {
+                stancePhaseStartPos = i;
+            } else {
+                break;
+            }
+        }
         float[] residualVel = mVelocities.get(residualPos);
-        long t0 = mTimestamps.get(0);
+        long t0 = mTimestamps.get(stancePhaseStartPos);
         long movingTotalTime = mTimestamps.get(residualPos) - t0;
         float[] downValue = new float[3];
-        float[] mPosition = posesRecord.get(0).getPosition();
+        mPosition = posesRecord.get(stancePhaseStartPos).getPosition();
         float[] preVelocity = new float[]{0,0,0};
-        for(int i = 1; i <= residualPos; i++) {
+        for(int i = stancePhaseStartPos + 1; i <= residualPos; i++) {
             long movingCurrentTime = mTimestamps.get(i) - t0;
-            long dt = mTimestamps.get(i) - mTimestamps.get(i-1);
-            posesRecord.get(i);
+            float dt = (float) (mTimestamps.get(i) - mTimestamps.get(i-1))/NS2S;
             float[] currentVelocity = mVelocities.get(i);
             for(int j = 0; j < 3; j++) {
-                downValue[j] = residualVel[j] * (movingCurrentTime/movingTotalTime);
+                downValue[j] = residualVel[j] * (float)((double)movingCurrentTime/(double)movingTotalTime);
                 currentVelocity[j] = currentVelocity[j] - downValue[j];
                 mPosition[j] = mPosition[j] + preVelocity[j] * dt + (currentVelocity[j] - preVelocity[j]) * dt / 2;
             }
@@ -196,8 +213,6 @@ public class LocTracker implements SensorEventListener {
         for(int i = residualPos+1; i < posesRecord.size(); i++) {
             posesRecord.get(i).setPosition(mPosition);
         }
-
-
         if(mStateCallback != null) {
             mStateCallback.onStancePhaseCorrection(posesRecord);
         }
@@ -209,8 +224,6 @@ public class LocTracker implements SensorEventListener {
             reset();
             return;
         }
-
-
         Long lastTimestamp = mTimestamps.get(mTimestamps.size() - 2);
         Long curTimestamp = mTimestamps.get(mTimestamps.size() - 1);
         float[] lastAcc = mLinearAccs.get(mLinearAccs.size() - 2);
@@ -229,12 +242,13 @@ public class LocTracker implements SensorEventListener {
         Transform currentPose = new Transform(mRotMat[0],mRotMat[1],mRotMat[2],mPosition[0],
                                               mRotMat[3],mRotMat[4],mRotMat[5],mPosition[1],
                                               mRotMat[6],mRotMat[7],mRotMat[8],mPosition[2]);
-        posesRecord.add(new ImuPose(eventTime, currentPose));
+        float[] gyro = new float[3];
+        System.arraycopy(mGyro, 0, gyro, 0, 3);
+        posesRecord.add(new ImuPose(eventTime, currentPose, gyro));
     }
 
     private boolean inStancePhase() {
         float[] curAcc = mLinearAccs.get(mLinearAccs.size() - 1);
-
         // check stance phase
         if (curAcc[0] == 0.0f && curAcc[1] == 0.0f && curAcc[2] == 0.0f) {
             zeroCount += 1;

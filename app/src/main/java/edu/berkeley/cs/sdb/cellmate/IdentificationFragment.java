@@ -9,6 +9,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.BlurMaskFilter;
 import android.graphics.ImageFormat;
 import android.media.Image;
 import android.media.ImageReader;
@@ -42,6 +43,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -292,24 +296,42 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             image.close();
             mLatestImageData = new byte[data.size()];
             data.copyTo(mLatestImageData, 0);
-            mFrameCache.add(new KeyFrame(imageGeneratedTime,
-                                         mStateCallback.getNearestPoseAndTime(imageGeneratedTime).pose,
-                                         0,
-                                         mLatestImageData));
+            Camera camera = Camera.getInstance();
+            int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
+            KeyFrame frame = new KeyFrame(mStateCallback.getNearestPoseAndTime(imageGeneratedTime),
+                    mLatestImageData,
+                    rotateClockwiseAngle);
+            mFrameCache.add(frame);
             if(mFrameCache.size() > mFrameCacheLimit) {
                 mFrameCache.remove(0);
             }
 
             if (time - mLastTime > REQUEST_INTERVAL) {
-                KeyFrame frameToSend = bestFrameToSend();
-                Transform pose = frameToSend.getPose();
-                mPosesMap.put(frameToSend.getTime(), new Poses(false,pose,null,getPoseSI()));
-                Camera camera = Camera.getInstance();
-                int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
                 Runnable senderRunnable = new Runnable() {
                     @Override
                     public void run() {
-                        sendRequestToServer(data, rotateClockwiseAngle, frameToSend.getTime());
+                        sortFramesToFindBest();
+                        KeyFrame frameToSend = mFrameCache.get(0);
+                        Transform pose = frameToSend.getImuPose().pose;
+                        mPosesMap.put(frameToSend.getImuPose().time, new Poses(false,pose,null,getPoseSI()));
+
+                        List<ByteString> datas = new ArrayList<>();
+                        List<Integer> rotateClockwiseAngles =  new ArrayList<>();
+                        List<Long> times =  new ArrayList<>();
+                        List<Float> blurness = new ArrayList<>();
+                        List<SnapLinkProto.Matrix> poses = new ArrayList<>();
+
+
+                        for(int i = 0; i < mFrameCache.size(); i++) {
+                            datas.add(ByteString.copyFrom(mFrameCache.get(i).getData()));
+                            rotateClockwiseAngles.add(mFrameCache.get(i).getmRotateClockwiseAngle());
+                            times.add(mFrameCache.get(i).getImuPose().time);
+                            blurness.add((float)i);
+                            mFrameCache.get(i).getImuPose().pose.print();
+                            poses.add(getMessageMatrixFromPose(mFrameCache.get(i).getImuPose().pose));
+                        }
+
+                        sendRequestToServer(datas, rotateClockwiseAngles, times, blurness, poses);
 
                     }
                 };
@@ -326,9 +348,51 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         }
     };
 
-    private KeyFrame bestFrameToSend() {
-        return mFrameCache.get(mFrameCache.size()-1);
+    Comparator<KeyFrame> gyroComparator = new Comparator<KeyFrame>() {
+        @Override
+        public int compare(KeyFrame keyFrame, KeyFrame t1) {
+            float[] gyroReading = keyFrame.getImuPose().gyroReading;
+            float norm1 = (float)Math.sqrt(Math.pow(gyroReading[0], 2)+Math.pow(gyroReading[1], 2)+ Math.pow(gyroReading[2], 2));
+            float[] gyroReading2 = t1.getImuPose().gyroReading;
+            float norm2 = (float)Math.sqrt(Math.pow(gyroReading2[0], 2)+Math.pow(gyroReading2[1], 2)+ Math.pow(gyroReading2[2], 2));
+            if(norm1 - norm2 < 0) {
+                return -1;
+            } else if(norm1 - norm2 > 0) {
+                return 1;
+            } else {
+                return 0;
+            }
+        }
+    };
+
+    Comparator<KeyFrame> featureComparator = new Comparator<KeyFrame>() {
+        @Override
+        public int compare(KeyFrame keyFrame, KeyFrame t1) {
+            return t1.getNumOfEdges() - keyFrame.getNumOfEdges();
+        }
+    };
+
+    Comparator<KeyFrame> rankComparator = new Comparator<KeyFrame>() {
+        @Override
+        public int compare(KeyFrame keyFrame, KeyFrame t1) {
+            return keyFrame.getRank() - t1.getRank();
+        }
+    };
+
+    private void sortFramesToFindBest() {
+        Collections.sort(mFrameCache, gyroComparator);
+        for(int i = 0; i < mFrameCache.size(); i++) {
+            mFrameCache.get(i).setGyroRank(i);
+        }
+
+        Collections.sort(mFrameCache, featureComparator);
+        for(int i = 0; i < mFrameCache.size(); i++) {
+            mFrameCache.get(i).setFeatureRank(i);
+        }
+
+        Collections.sort(mFrameCache, rankComparator);
     }
+
     private View mView;
 
     public static IdentificationFragment newInstance() {
@@ -338,11 +402,30 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     private Transform getPoseFromMessage(SnapLinkProto.LocalizationResponse value) {
         SnapLinkProto.Matrix matrix = value.getPose();
         return new Transform(matrix.getData(0), matrix.getData(1), matrix.getData(2), matrix.getData(3),
-                             matrix.getData(4), matrix.getData(5), matrix.getData(6), matrix.getData(7),
-                             matrix.getData(8), matrix.getData(9), matrix.getData(10), matrix.getData(11));
+                matrix.getData(4), matrix.getData(5), matrix.getData(6), matrix.getData(7),
+                matrix.getData(8), matrix.getData(9), matrix.getData(10), matrix.getData(11));
     }
 
-    private void  sendRequestToServer(ByteString data, int rotateClockwiseAngle, long messageId) {
+    private SnapLinkProto.Matrix getMessageMatrixFromPose(Transform transform) {
+        SnapLinkProto.Matrix matrix = SnapLinkProto.Matrix.newBuilder().setRows(3)
+                .setCols(4)
+                .addData(transform.r11())
+                .addData(transform.r12())
+                .addData(transform.r13())
+                .addData(transform.x())
+                .addData(transform.r21())
+                .addData(transform.r22())
+                .addData(transform.r23())
+                .addData(transform.y())
+                .addData(transform.r31())
+                .addData(transform.r32())
+                .addData(transform.r33())
+                .addData(transform.z())
+                .build();
+        return matrix;
+    }
+
+    private void  sendRequestToServer(List<ByteString> datas, List<Integer> rotateClockwiseAngles, List<Long> messageIds, List<Float> blurness, List<SnapLinkProto.Matrix> poses) {
         Activity activity = getActivity();
         SharedPreferences preferences = PreferenceManager.getDefaultSharedPreferences(activity);
         float Fx = Float.parseFloat(preferences.getString(activity.getString(R.string.camera_fx_key), activity.getString(R.string.camera_fx_val)));
@@ -361,22 +444,28 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
 
         try {
-            int orientation = 1;
-            if(rotateClockwiseAngle == 90) {
-                orientation = 8;
-            } else if(rotateClockwiseAngle == 180) {
-                orientation = 3;
-            } else if(rotateClockwiseAngle == 270) {
-                orientation = 6;
-            } else {
-                orientation = 1;
+            List<Integer> orientations = new ArrayList<>();
+            for(int i = 0; i < rotateClockwiseAngles.size(); i++) {
+                int orientation = 1;
+                if(rotateClockwiseAngles.get(i) == 90) {
+                    orientation = 8;
+                } else if(rotateClockwiseAngles.get(i) == 180) {
+                    orientation = 3;
+                } else if(rotateClockwiseAngles.get(i) == 270) {
+                    orientation = 6;
+                } else {
+                    orientation = 1;
+                }
+                orientations.add(orientation);
             }
 
             SnapLinkProto.LocalizationRequest request = SnapLinkProto.LocalizationRequest.newBuilder()
-                    .setImage(data)
-                    .setRequestId(messageId)
                     .setCamera(SnapLinkProto.CameraModel.newBuilder().setCx(mCx).setCy(mCy).setFx(mFx).setFy(mFy).build())
-                    .setOrientation(orientation)
+                    .addAllImage(datas)
+                    .addAllOrientation(orientations)
+                    .addAllRequestId(messageIds)
+                    .addAllBlurness(blurness)
+                    .addAllPoses(poses)
                     .build();
             mRequestObserver.onNext(request);
         } catch (RuntimeException e) {
@@ -746,4 +835,5 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             mPosesMap.remove(entry);
         }
     }
+
 }

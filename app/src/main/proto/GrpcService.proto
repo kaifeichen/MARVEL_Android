@@ -48,10 +48,13 @@ message Item {
 }
 
 message LocalizationRequest {
-    uint64 request_id = 1;
-    bytes image = 2; // JPEG bytes
-    uint32 orientation = 3; // JPEG EXIF orientation
-    CameraModel camera = 4;
+    repeated uint64 request_id = 1;
+    repeated bytes image = 2; // JPEG bytes
+    repeated uint32 orientation = 3; // JPEG EXIF orientation
+    repeated float blurness = 4;
+    repeated Matrix poses = 5;
+    CameraModel camera = 6;
+    string informations = 7;
 }
 
 message LocalizationResponse {

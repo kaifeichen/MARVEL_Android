@@ -121,6 +121,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
         mSensorManager.registerListener(mLocTracker, mAccSensor, SensorManager.SENSOR_DELAY_FASTEST);
         mSensorManager.registerListener(mLocTracker, mRotationSensor, SensorManager.SENSOR_DELAY_FASTEST);
+        mSensorManager.registerListener(mLocTracker, mGyroSensor, SensorManager.SENSOR_DELAY_FASTEST);
     }
 
     @Override
@@ -165,6 +166,7 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mAccSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
         mRotationSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR);
+        mGyroSensor = mSensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE);
 
         mLocTracker = new LocTracker();
 

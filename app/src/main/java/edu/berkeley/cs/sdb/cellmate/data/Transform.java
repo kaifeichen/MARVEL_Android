@@ -35,10 +35,13 @@ public class Transform {
         mData[15] = 1;
     }
 
-    private Transform(float[] data) {
+    public Transform(float[] data) {
         mData = data;
     }
 
+    public float[] getData() {
+        return mData;
+    }
 
     public void print(){
         System.out.print( r11() + " " + r12() + " " + r13() + " " + x() + "\n"

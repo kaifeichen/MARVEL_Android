@@ -1,51 +1,111 @@
 package edu.berkeley.cs.sdb.cellmate.data;
 
+import org.opencv.core.Core;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfByte;
+import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
+
+import edu.berkeley.cs.sdb.cellmate.algo.Localizer.LocTracker;
+
 /**
  * Created by tongli on 10/31/17.
  */
 
 public class KeyFrame {
-    private Transform mPose;
-    private int mNumOfEdges;
+    private LocTracker.ImuPose mImuPose;
+    private int mNumOfEdges = -1;
+    private float mGyroNorm = -1;
     private byte[] mData;
-    private long mTime;
+    private int mRotateClockwiseAngle;
+    private int mGyroRank;
+    private int mFeatureRank;
+    private int mRank = -1;
 
-    public KeyFrame(long time, Transform Pose, int NumOfEdges, byte[] Data) {
-        mTime = time;
-        mPose = Pose;
-        mNumOfEdges = NumOfEdges;
+    public KeyFrame(LocTracker.ImuPose imuPose, byte[] Data, int rotateClockwiseAngle) {
+        mImuPose = imuPose;
         mData = Data;
+        mRotateClockwiseAngle = rotateClockwiseAngle;
     }
 
-    public void setPose(Transform mPose) {
-        this.mPose = mPose;
+    public void setImuPose(LocTracker.ImuPose imuPose) {
+        mImuPose = imuPose;
     }
 
-    public void setNumOfEdges(int mNumOfEdges) {
-        this.mNumOfEdges = mNumOfEdges;
+    public void setNumOfEdges(int numOfEdges) {
+        mNumOfEdges = numOfEdges;
     }
 
-    public void setData(byte[] mData) {
-        this.mData = mData;
+    public void setData(byte[] data) {
+        mData = data;
     }
 
-    public void setTime(long mTime) {
-        this.mTime = mTime;
+    public void setmRotateClockwiseAngle(int mRotateClockwiseAngle) {
+        this.mRotateClockwiseAngle = mRotateClockwiseAngle;
     }
 
-    public Transform getPose() {
-        return mPose;
+    public LocTracker.ImuPose getImuPose() {
+        return mImuPose;
     }
 
+    public float getGyroNorm() {
+        if(mGyroNorm == -1) {
+            float[] gyroReading = mImuPose.gyroReading;
+
+            mGyroNorm = (float)Math.sqrt(Math.pow(gyroReading[0], 2)+Math.pow(gyroReading[1], 2)+ Math.pow(gyroReading[2], 2));
+            return mGyroNorm;
+        } else {
+            return mGyroNorm;
+        }
+    }
     public int getNumOfEdges() {
-        return mNumOfEdges;
+        if(mNumOfEdges == -1) {
+            Mat src = Imgcodecs.imdecode(new MatOfByte(mData), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
+            Mat src_gray = new Mat();
+            Imgproc.cvtColor(src, src_gray, Imgproc.COLOR_BGR2GRAY);
+            Mat grad_x = new Mat();
+            Mat grad_y = new Mat();
+            Imgproc.Sobel(src_gray, grad_x, 3, 1, 0, 1, 1, 0);
+            Imgproc.Sobel(src_gray, grad_y, 3, 0, 1, 1, 1, 0);
+            Mat abs_grad_x = new Mat();
+            Mat abs_grad_y = new Mat();
+            Core.convertScaleAbs(grad_x, abs_grad_x);
+            Core.convertScaleAbs(grad_y, abs_grad_y);
+            Mat grad = new Mat();
+            Core.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
+            mNumOfEdges = (int)Core.sumElems(grad).val[0];
+            return mNumOfEdges;
+        } else {
+            return mNumOfEdges;
+        }
     }
 
     public byte[] getData() {
         return mData;
     }
 
-    public long getTime() {
-        return mTime;
+
+    public int getmRotateClockwiseAngle() {
+        return mRotateClockwiseAngle;
     }
+
+    public void setGyroRank(int rank) {
+        mGyroRank = rank;
+    }
+
+    public void setFeatureRank(int rank) {
+        mFeatureRank = rank;
+    }
+
+    public int getRank() {
+        if(mRank == -1) {
+            return mGyroRank + mFeatureRank;
+        }
+        return mRank;
+    }
+
+    public int setRank(int rank) {
+        return mRank = rank;
+    }
+
 }
