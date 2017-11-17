@@ -23,7 +23,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
 
+import org.opencv.core.Point;
+
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 import edu.berkeley.cs.sdb.cellmate.view.AutoFitTextureView;
@@ -44,6 +47,7 @@ public class PreviewFragment extends Fragment {
     // The android.util.Size of camera preview.
     private Size mPreviewSize;
     private Size totalSize = null;
+    private int mScale = 2;
     private final TextureView.SurfaceTextureListener mSurfaceTextureListener = new TextureView.SurfaceTextureListener() {
 
         @Override
@@ -219,8 +223,89 @@ public class PreviewFragment extends Fragment {
         mTextureView.setTransform(matrix);
     }
 
-    public void drawHighlight(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
 
+    public void drawFlow(LinkedList<Point> ptNewFrameList, LinkedList<Point> ptOldFrameList, int width, int height) {
+        final Activity activity = getActivity();
+            if (activity != null) {
+                activity.runOnUiThread(() -> {
+
+                    if(mBmp == null) {
+                        return;
+                    }
+
+                    if(GroundTruthStatus == GroundTruthNotAvailable) {
+                        return;
+                    }
+
+                    if(ptOldFrameList.size() == 0) {
+                        return;
+                    }
+
+                    int col = Color.YELLOW;
+                    int col2 = Color.BLUE;
+                    Paint paint = new Paint();
+                    paint.setColor(col);
+                    paint.setStyle(Paint.Style.STROKE);
+                    Paint paint2 = new Paint();
+                    paint2.setColor(col2);
+                    paint2.setStyle(Paint.Style.STROKE);
+                    Canvas canvas = new Canvas(mBmp);
+                    double newWidth = Math.min(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                    double newHeight = Math.max(mPreviewSize.getWidth(), mPreviewSize.getHeight());
+                    double ratio = newWidth/width;
+                    //Change the points from image coordinate to preview coordinate,
+                    //since highlight is draw on the preview coordinate
+                    for (int i = 0; i < ptOldFrameList.size(); i++) {
+                        Point pt = ptOldFrameList.get(i);
+                        pt.x = pt.x * ratio;
+                        pt.y = pt.y * ratio;
+                        canvas.drawCircle((float)(pt.x/mScale), (float)(pt.y/mScale), 1, paint);
+                    }
+                    for (int i = 0; i < ptNewFrameList.size(); i++) {
+                        Point pt = ptNewFrameList.get(i);
+                        pt.x = pt.x * ratio;
+                        pt.y = pt.y * ratio;
+                        canvas.drawCircle((float)(pt.x/mScale), (float)(pt.y/mScale), 1, paint2);
+                    }
+
+                    if(GroundTruthStatus == GroundTruthUnUsed || GroundTruthStatus == GroundTruthUpdated) {
+                        GroundTruthStatus = GroundTruthUsed;
+                        Point groundTruth = new Point(mXLists.get(0), mYLists.get(0));
+                        int index = nearestPointIndex(ptOldFrameList, groundTruth);
+                        mFlow = ptNewFrameList.get(index);
+                        int size = 20;
+                        Rect rect = new Rect((int)(mFlow.x/mScale) - size, (int)(mFlow.y/mScale) - size, (int)(mFlow.x/mScale) + size, (int)(mFlow.y/mScale) + size);
+                        canvas.drawRect(rect, paint);
+                        canvas.drawCircle((float)mFlow.x, (float)mFlow.y, 2, paint2);
+                    } else {
+                        int index = nearestPointIndex(ptOldFrameList, mFlow);
+                        mFlow = ptNewFrameList.get(index);
+                        int size = 20;
+                        Rect rect = new Rect((int)(mFlow.x/mScale) - size, (int)(mFlow.y/mScale) - size, (int)(mFlow.x/mScale) + size, (int)(mFlow.y/mScale) + size);
+                        canvas.drawRect(rect, paint);
+//                        canvas.drawCircle((float)mFlow.x, (float)mFlow.y, 2, paint2);
+                    }
+                    mHighLight.setImageBitmap(mBmp);
+                });
+        }
+    }
+
+    private int nearestPointIndex(List<Point> points, Point target) {
+        double minDistSquare = Double.MAX_VALUE;
+        int minIndex = 0;
+        for(int i = 0; i < points.size(); i++) {
+            Point pt = points.get(i);
+            double distSquare = (target.x - pt.x) * (target.x - pt.x) + (target.y - pt.y) * (target.y - pt.y);
+            if(distSquare < minDistSquare) {
+                minIndex = i;
+                minDistSquare = distSquare;
+            }
+        }
+        return minIndex;
+    }
+
+
+    public void drawHighlight(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
         final Activity activity = getActivity();
         if (activity != null) {
             activity.runOnUiThread(() -> {
@@ -229,10 +314,9 @@ public class PreviewFragment extends Fragment {
                     name.remove(name.size()-1);
                     col = Color.RED;
                 }
-                float scale = 2;
                 if (x.get(0) != -1) {
                     double width = Math.min(mPreviewSize.getWidth(), mPreviewSize.getHeight());
-                    double height = Math.max(mPreviewSize.getWidth(), mPreviewSize.getHeight());;
+                    double height = Math.max(mPreviewSize.getWidth(), mPreviewSize.getHeight());
                     highlightFrameSize = new Size((int) mPreviewSize.getWidth(), (int) mPreviewSize.getHeight());
 
                     Paint paint = new Paint();
@@ -246,7 +330,7 @@ public class PreviewFragment extends Fragment {
 
                     System.out.println(width);
                     System.out.println(height);
-                    Bitmap mBmp = Bitmap.createBitmap((int) (width/scale), (int) (height/scale), Bitmap.Config.ARGB_8888);
+                    mBmp = Bitmap.createBitmap((int) (width/mScale), (int) (height/mScale), Bitmap.Config.ARGB_8888);
                     Canvas canvas = new Canvas(mBmp);
                     mName.clear();
                     mRight.clear();
@@ -255,10 +339,10 @@ public class PreviewFragment extends Fragment {
                     mTop.clear();
                     for (int i = 0; i < name.size(); i++) {
                         mName.add(name.get(i));
-                        mRight.add((x.get(i) + size.get(i))/scale);
-                        mLeft.add((x.get(i) - size.get(i))/scale);
-                        mBottom.add((y.get(i) + size.get(i))/scale);
-                        mTop.add((y.get(i) - size.get(i))/scale);
+                        mRight.add((x.get(i) + size.get(i))/mScale);
+                        mLeft.add((x.get(i) - size.get(i))/mScale);
+                        mBottom.add((y.get(i) + size.get(i))/mScale);
+                        mTop.add((y.get(i) - size.get(i))/mScale);
 
 
                         Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
@@ -272,13 +356,12 @@ public class PreviewFragment extends Fragment {
                         canvas.drawRect(rect5, paint);
                         Rect rect = new Rect(mLeft.get(i).intValue(), mTop.get(i).intValue(), mRight.get(i).intValue(), mBottom.get(i).intValue());
                         canvas.drawRect(rect, paint);
-                        paint.setTextSize(size.get(i).floatValue()/scale);
+                        paint.setTextSize(size.get(i).floatValue()/mScale);
                         canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
                     }
 
                     mHighLight.setImageBitmap(mBmp);
                 } else {
-                    System.out.println("????????????????????????????????????????????????????????????????");
                     highlightFrameSize = null;
                     if (mBmp != null && !mBmp.isRecycled()) {
                         mBmp.recycle();
@@ -290,6 +373,29 @@ public class PreviewFragment extends Fragment {
         }
     }
 
+    public void setGroundTruth(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
+        mNameLists = name;
+        mXLists = x;
+        mYLists = y;
+        if(GroundTruthStatus == GroundTruthNotAvailable) {
+            GroundTruthStatus = GroundTruthUnUsed;
+        } else {
+            GroundTruthStatus = GroundTruthUpdated;
+        }
+    }
+
+    private List<Float> mXLists = new ArrayList<>();
+    private List<Float> mYLists = new ArrayList<>();
+    private List<String> mNameLists = new ArrayList<>();
+    private Point mFlow = null;
+    private final int GroundTruthNotAvailable = 0;
+    private final int GroundTruthUnUsed = 1;
+    private final int GroundTruthUsed = 2;
+    private final int GroundTruthUpdated = 3;
+    private int GroundTruthStatus = GroundTruthNotAvailable;
+
+
+
 
     public void clearHighlight() {
         final Activity activity = getActivity();
@@ -300,6 +406,7 @@ public class PreviewFragment extends Fragment {
             });
         }
     }
+
 
 
     public interface StateCallback {

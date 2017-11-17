@@ -21,11 +21,33 @@ public class KeyFrame {
     private int mGyroRank;
     private int mFeatureRank;
     private int mRank = -1;
+    private final float GYRO_NORM_UPPER_LIMIT = 0.5f;
+    private final int NUM_EDGES_LOWER_LIMIT = 500000;
 
     public KeyFrame(LocTracker.ImuPose imuPose, byte[] Data, int rotateClockwiseAngle) {
         mImuPose = imuPose;
         mData = Data;
         mRotateClockwiseAngle = rotateClockwiseAngle;
+
+        //Calculate mGyroNorm
+        float[] gyroReading = mImuPose.gyroReading;
+        mGyroNorm = (float)Math.sqrt(Math.pow(gyroReading[0], 2)+Math.pow(gyroReading[1], 2)+ Math.pow(gyroReading[2], 2));
+
+        //Calculate mNumOfEdges
+        Mat src = Imgcodecs.imdecode(new MatOfByte(mData), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
+        Mat src_gray = new Mat();
+        Imgproc.cvtColor(src, src_gray, Imgproc.COLOR_BGR2GRAY);
+        Mat grad_x = new Mat();
+        Mat grad_y = new Mat();
+        Imgproc.Sobel(src_gray, grad_x, 3, 1, 0, 1, 1, 0);
+        Imgproc.Sobel(src_gray, grad_y, 3, 0, 1, 1, 1, 0);
+        Mat abs_grad_x = new Mat();
+        Mat abs_grad_y = new Mat();
+        Core.convertScaleAbs(grad_x, abs_grad_x);
+        Core.convertScaleAbs(grad_y, abs_grad_y);
+        Mat grad = new Mat();
+        Core.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
+        mNumOfEdges = (int)Core.sumElems(grad).val[0];
     }
 
     public void setImuPose(LocTracker.ImuPose imuPose) {
@@ -49,35 +71,10 @@ public class KeyFrame {
     }
 
     public float getGyroNorm() {
-        if(mGyroNorm == -1) {
-            float[] gyroReading = mImuPose.gyroReading;
-
-            mGyroNorm = (float)Math.sqrt(Math.pow(gyroReading[0], 2)+Math.pow(gyroReading[1], 2)+ Math.pow(gyroReading[2], 2));
-            return mGyroNorm;
-        } else {
-            return mGyroNorm;
-        }
+        return mGyroNorm;
     }
     public int getNumOfEdges() {
-        if(mNumOfEdges == -1) {
-            Mat src = Imgcodecs.imdecode(new MatOfByte(mData), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
-            Mat src_gray = new Mat();
-            Imgproc.cvtColor(src, src_gray, Imgproc.COLOR_BGR2GRAY);
-            Mat grad_x = new Mat();
-            Mat grad_y = new Mat();
-            Imgproc.Sobel(src_gray, grad_x, 3, 1, 0, 1, 1, 0);
-            Imgproc.Sobel(src_gray, grad_y, 3, 0, 1, 1, 1, 0);
-            Mat abs_grad_x = new Mat();
-            Mat abs_grad_y = new Mat();
-            Core.convertScaleAbs(grad_x, abs_grad_x);
-            Core.convertScaleAbs(grad_y, abs_grad_y);
-            Mat grad = new Mat();
-            Core.addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
-            mNumOfEdges = (int)Core.sumElems(grad).val[0];
-            return mNumOfEdges;
-        } else {
-            return mNumOfEdges;
-        }
+        return mNumOfEdges;
     }
 
     public byte[] getData() {
@@ -107,5 +104,27 @@ public class KeyFrame {
     public int setRank(int rank) {
         return mRank = rank;
     }
+
+    public double angleDiffInDegree(KeyFrame other) {
+        float[] zVec = {0,0,-1};
+        float[] vec0 = this.getImuPose().pose.multiplyVector3(zVec);
+        float[] vec1 = other.getImuPose().pose.multiplyVector3(zVec);
+        float dotProduct = vec0[0] * vec1[0] + vec0[1] * vec1[1] + vec0[2] * vec1[2];
+        double norm0 = Math.sqrt(vec0[0] * vec0[0] + vec0[1] * vec0[1] + vec0[2] * vec0[2]);
+        double norm1 = Math.sqrt(vec1[0] * vec1[0] + vec1[1] * vec1[1] + vec1[2] * vec1[2]);
+        double theta = Math.acos(dotProduct/(norm0 * norm1));
+        return Math.toDegrees(theta);
+    }
+
+    public boolean isBlur() {
+        if(mGyroNorm > 0.5) {
+            return true;
+        }
+        if(mNumOfEdges < NUM_EDGES_LOWER_LIMIT) {
+            return true;
+        }
+        return false;
+    }
+
 
 }

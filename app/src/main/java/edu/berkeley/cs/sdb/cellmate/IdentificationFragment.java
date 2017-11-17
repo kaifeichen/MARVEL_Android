@@ -32,12 +32,25 @@ import com.google.protobuf.ByteString;
 import org.opencv.android.InstallCallbackInterface;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfDouble;
 import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.MatOfPoint3f;
 import org.opencv.core.Point;
 import org.opencv.core.Point3;
+import org.opencv.core.CvType;
+import org.opencv.core.MatOfByte;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfFloat;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
+import org.opencv.core.Point;
+import org.opencv.imgcodecs.Imgcodecs;
+import org.opencv.imgproc.Imgproc;
+import org.opencv.video.Video;
+
+
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -47,6 +60,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -83,6 +97,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     private boolean mAttached;
     private int REQUEST_INTERVAL = 500;
     private float mImagePreviewScale = 1;
+    private final int ANGLE_DIFF_LIMIT = 40;
     LoaderCallbackInterface mLoaderCallback = new LoaderCallbackInterface() {
         @Override
         public void onManagerConnected(int i) {
@@ -94,6 +109,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
         }
     };
+
+
     private StateCallback mStateCallback;
 
     private HashMap<Integer, List<Label>> mLabels;
@@ -107,6 +124,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     private byte[] mLatestImageData;
     private List<KeyFrame> mFrameCache = new ArrayList<>();
     private int mFrameCacheLimit = 10;
+    private List<KeyFrame> mFrameCacheForOF = new ArrayList<>();
+    private final int mFrameCacheForOFLimit = 3;
 
     long mCurrentPoseMATime;
     Transform mCurrentPoseMA;
@@ -223,6 +242,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 //                        mStateCallback.onObjectIdentified(value.getItemsList(), value.getWidth(), value.getHeight());
                         nameListOld.add("red");
                         mStateCallback.onObjectIdentified(nameListOld, XListOld, YListOld, SizeListOld);
+                        mStateCallback.setGroundTruth(nameListOld, XListOld, YListOld, SizeListOld);
 //                        mStateCallback.onObjectIdentified(nameList, XList, YList, SizeList, value.getWidth(), value.getHeight());
                     } catch (IllegalStateException e) {
                         //Do nothing
@@ -252,7 +272,10 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             showToast("Server is disconnected due to grpc complete", Toast.LENGTH_LONG);
         }
     };
+
+
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
+
         if (mAttached) {
             System.out.println("ImageReader.OnImageAvailableListener");
             Long time = System.currentTimeMillis();
@@ -277,14 +300,6 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
             Image image = reader.acquireLatestImage();
 
-//            if (time - mLastTime < REQUEST_INTERVAL) {
-//                try{
-//                    image.close();
-//                } catch (NullPointerException e) {
-//
-//                }
-//                return;
-//            }
 
             ByteString data;
             if (image == null) {
@@ -294,14 +309,61 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             long imageGeneratedTime = image.getTimestamp();
             data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
             image.close();
+
+            //Construct the frame for current image
             mLatestImageData = new byte[data.size()];
             data.copyTo(mLatestImageData, 0);
             Camera camera = Camera.getInstance();
             int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
-            KeyFrame frame = new KeyFrame(mStateCallback.getNearestPoseAndTime(imageGeneratedTime),
+            KeyFrame curFrame = new KeyFrame(mStateCallback.getNearestPoseAndTime(imageGeneratedTime),
                     mLatestImageData,
                     rotateClockwiseAngle);
-            mFrameCache.add(frame);
+
+
+//            Optical Flow
+            mFrameCacheForOF.add(curFrame);
+            if(mFrameCacheForOF.size() >= mFrameCacheForOFLimit) {
+                KeyFrame firstFrame = mFrameCacheForOF.get(0);
+
+                //choose which frame in cache to do optical flow, record it as next anchor frame
+                int index;
+                for(index = mFrameCacheForOF.size() - 1; index > 1; index--) {
+                    KeyFrame frame_i =  mFrameCacheForOF.get(index);
+                    double angleDiff = frame_i.angleDiffInDegree(firstFrame);
+                    boolean isBlur = curFrame.isBlur();
+                    if(angleDiff > ANGLE_DIFF_LIMIT || isBlur) {
+                        continue;
+                    } else {
+                        break;
+                    }
+                }
+
+                //Keep on popping the cache to the newest anchor frame
+                for(int j = 0; j < index; j++) {
+                    mFrameCacheForOF.remove(0);
+                }
+
+                //doing the optical flow
+                Runnable opticalFlowRunnable = new Runnable() {
+                    @Override
+                    public void run() {
+                        opticalFlow(mFrameCacheForOF.get(0).getData());
+                    }
+                };
+                mHandler.post(opticalFlowRunnable);
+            }
+//
+//            Runnable opticalFlowRunnable = new Runnable() {
+//                @Override
+//                public void run() {
+//                    opticalFlow(mLatestImageData);
+//                }
+//            };
+//            mHandler.post(opticalFlowRunnable);
+
+
+            //Offloading
+            mFrameCache.add(curFrame);
             if(mFrameCache.size() > mFrameCacheLimit) {
                 mFrameCache.remove(0);
             }
@@ -605,6 +667,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         } else {
             mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
         }
+
+
     }
 
     @Override
@@ -703,24 +767,6 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         objectPoints.fromList(points3);
         projectPoints(objectPoints, rvec, tvec, K, new MatOfDouble(), planePoints);
 
-
-
-//        poseInCamera.print();
-//        double[] data = new double[3];
-//        rvec.get(0,0,data);
-//        System.out.println("rvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
-//        tvec.get(0,0,data);
-//        System.out.println("tvec: " + " " + data[0] + " " + data[1] + " " + data[2]);
-//        float[] dataF = new float[9];
-//        K.get(0,0,dataF);
-//        System.out.println("K: " + " " + dataF[0] + " " + dataF[1] + " " + dataF[2] + "\n "
-//                + dataF[3] + " " + dataF[4] + " " + dataF[5] + "\n "
-//                + dataF[6] + " " + dataF[7] + " " + dataF[8] + "\n ");
-        List<Point3> pointsList = objectPoints.toList();
-//        for(int i = 0; i < pointsList.size(); i++) {
-//            System.out.println(names.get(i) + " " + pointsList.get(i).toString());
-//        }
-
         // find points in the image
         Point center = new Point(width / 2, height / 2);
         List<Point> points2 = planePoints.toList();
@@ -761,8 +807,10 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
     public interface StateCallback {
         void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size);
+        void setGroundTruth(List<String> name, List<Float> x, List<Float> y, List<Float> size);
         LocTracker.ImuPose getNearestPoseAndTime(long time);
         LocTracker.ImuPose getLatestPoseAndTime();
+        void onFlowDetected(LinkedList<Point> ptNewFrameList, LinkedList<Point> ptOldFrameList, int width, int height);
     }
 
 
@@ -834,6 +882,146 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         for(long entry : removingEntries) {
             mPosesMap.remove(entry);
         }
+    }
+
+    private Mat mRgba, mErodeKernel, matOpFlowPrev, matOpFlowThis;
+    private MatOfFloat mMOFerr;
+    private MatOfByte mMOBStatus;
+    private MatOfPoint2f mMOP2fptsPrev = null, mMOP2fptsThis, mMOP2fptsSafe;
+    private MatOfPoint MOPcorners;
+    private int x, y, iLineThickness = 3, iGFFTMax = 200;
+    private List<Point> cornersThis, cornersPrev;
+    private List<Byte> byteStatus;
+    private Point pt, pt2;
+
+    private void opticalFlow(byte[] data) {
+        //Variables for opencv optical flow
+        if(mMOP2fptsPrev == null) {
+            mMOP2fptsPrev = new MatOfPoint2f();
+            mMOP2fptsThis = new MatOfPoint2f();
+            mMOP2fptsSafe = new MatOfPoint2f();
+            mMOFerr = new MatOfFloat();
+            mMOBStatus = new MatOfByte();
+            MOPcorners = new MatOfPoint();
+            mRgba = new Mat();
+            matOpFlowThis = new Mat();
+            matOpFlowPrev = new Mat();
+            cornersThis = new ArrayList<>();
+            cornersPrev = new ArrayList<>();
+            pt = new Point(0, 0);
+            pt2 = new Point(0, 0);
+        }
+
+        long time = System.currentTimeMillis();
+
+
+        mRgba = Imgcodecs.imdecode(new MatOfByte(data), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
+        System.out.println("decode time" + (System.currentTimeMillis() - time));
+
+        long beforeRotateTime = System.currentTimeMillis();
+        Camera camera = Camera.getInstance();
+        int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
+        int orientation = 1;
+        if(rotateClockwiseAngle == 90) {
+            orientation = 8;
+        } else if(rotateClockwiseAngle == 180) {
+            orientation = 3;
+        } else if(rotateClockwiseAngle == 270) {
+            orientation = 6;
+        } else {
+            orientation = 1;
+        }
+        mRgba = rotateImage(mRgba, orientation);
+        System.out.println("rotate time" + (System.currentTimeMillis() - beforeRotateTime));
+
+
+        if (mMOP2fptsPrev.rows() == 0) {
+
+            //Log.d("Baz", "First time opflow");
+            // first time through the loop so we need prev and this mats
+            // plus prev points
+            // get this mat
+            Imgproc.cvtColor(mRgba, matOpFlowThis, Imgproc.COLOR_RGBA2GRAY);
+
+            // copy that to prev mat
+            matOpFlowThis.copyTo(matOpFlowPrev);
+
+            // get prev corners
+            Imgproc.goodFeaturesToTrack(matOpFlowPrev, MOPcorners, iGFFTMax, 0.05, 10);
+            mMOP2fptsPrev.fromArray(MOPcorners.toArray());
+
+            // get safe copy of this corners
+            mMOP2fptsPrev.copyTo(mMOP2fptsSafe);
+        }
+        else
+        {
+            //Log.d("Baz", "Opflow");
+            // we've been through before so
+            // this mat is valid. Copy it to prev mat
+            matOpFlowThis.copyTo(matOpFlowPrev);
+
+            // get this mat
+            Imgproc.cvtColor(mRgba, matOpFlowThis, Imgproc.COLOR_RGBA2GRAY);
+
+            // get the corners for this mat
+            Imgproc.goodFeaturesToTrack(matOpFlowThis, MOPcorners, iGFFTMax, 0.05, 10);
+            mMOP2fptsThis.fromArray(MOPcorners.toArray());
+
+            // retrieve the corners from the prev mat
+            // (saves calculating them again)
+            mMOP2fptsSafe.copyTo(mMOP2fptsPrev);
+
+            // and save this corners for next time through
+
+            mMOP2fptsThis.copyTo(mMOP2fptsSafe);
+        }
+
+
+        /*
+        Parameters:
+            prevImg first 8-bit input image
+            nextImg second input image
+            prevPts vector of 2D points for which the flow needs to be found; point coordinates must be single-precision floating-point numbers.
+            nextPts output vector of 2D points (with single-precision floating-point coordinates) containing the calculated new positions of input features in the second image; when OPTFLOW_USE_INITIAL_FLOW flag is passed, the vector must have the same size as in the input.
+            status output status vector (of unsigned chars); each element of the vector is set to 1 if the flow for the corresponding features has been found, otherwise, it is set to 0.
+            err output vector of errors; each element of the vector is set to an error for the corresponding feature, type of the error measure can be set in flags parameter; if the flow wasn't found then the error is not defined (use the status parameter to find such cases).
+        */
+        Video.calcOpticalFlowPyrLK(matOpFlowPrev, matOpFlowThis, mMOP2fptsPrev, mMOP2fptsThis, mMOBStatus, mMOFerr);
+
+        cornersPrev = mMOP2fptsPrev.toList();
+        cornersThis = mMOP2fptsThis.toList();
+        byteStatus = mMOBStatus.toList();
+
+        y = byteStatus.size() - 1;
+
+
+        LinkedList<Point> ptNewFrame = new LinkedList<>();
+        LinkedList<Point> ptOldFrame = new LinkedList<>();
+
+        for (x = 0; x < y; x++) {
+            if (byteStatus.get(x) == 1) {
+                pt = cornersThis.get(x);
+                pt2 = cornersPrev.get(x);
+                ptNewFrame.add(pt);
+                ptOldFrame.add(pt2);
+            }
+        }
+
+        mStateCallback.onFlowDetected(ptNewFrame, ptOldFrame, mRgba.width(), mRgba.height());
+        System.out.println("optical flow uses " + (System.currentTimeMillis() - time) + "ms" );
+    }
+
+    Mat rotateImage(Mat img, int orientation) {
+        if (orientation == 8) { // 90
+            Core.transpose(img, img);
+            Core.flip(img, img, 1);
+        } else if (orientation == 3) { // 180
+            Core.flip(img, img, -1);
+        } else if (orientation == 6) { // 270
+            Core.transpose(img, img);
+            Core.flip(img, img, 0);
+        }
+        return img;
     }
 
 }

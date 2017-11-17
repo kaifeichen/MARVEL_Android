@@ -67,6 +67,8 @@ public class LocTracker implements SensorEventListener {
         // Do something here if sensor accuracy changes.
     }
 
+
+
     @Override
     public final void onSensorChanged(SensorEvent event) {
         eventCount++;
@@ -76,6 +78,8 @@ public class LocTracker implements SensorEventListener {
         }
 
         if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
+
+
             Long time = SystemClock.elapsedRealtimeNanos();
             // Android reuses events, so you probably want a copy
             float[] mLinearAcc = new float[4];
@@ -89,9 +93,6 @@ public class LocTracker implements SensorEventListener {
                     mLinearAcc[i] = 0.0f;
                 }
             }
-
-            float[] lastAcc = mLinearAccs.get(0);
-            System.out.println("lastAcc" + lastAcc[0]);
             mLinearAccs.add(mLinearAcc);
             updateIMU(event.timestamp);
         } else if (event.sensor.getType() == Sensor.TYPE_GAME_ROTATION_VECTOR) {

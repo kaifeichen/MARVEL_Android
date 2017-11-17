@@ -124,6 +124,16 @@ public class Transform {
         return fromOpenGlMatrixToTransform(c);
     }
 
+    public float[] multiplyVector3(float[] vec) {
+        float[] result = new float[3];
+
+        result[0] = mData[0] * vec[0] + mData[4] * vec[1] + mData[8] * vec[2];
+        result[1] = mData[1] * vec[0] + mData[5] * vec[1] + mData[9] * vec[2];
+        result[2] = mData[2] * vec[0] + mData[6] * vec[1] + mData[10] * vec[2];
+
+        return result;
+    }
+
     //OpenGLMatrix
     //m[offset +  0] m[offset +  4] m[offset +  8] m[offset + 12]
     //m[offset +  1] m[offset +  5] m[offset +  9] m[offset + 13]

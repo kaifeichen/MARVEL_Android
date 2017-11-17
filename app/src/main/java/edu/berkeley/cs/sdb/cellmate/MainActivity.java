@@ -22,6 +22,9 @@ import android.view.View;
 
 import com.splunk.mint.Mint;
 
+import org.opencv.core.Point;
+
+import java.util.LinkedList;
 import java.util.List;
 
 import edu.berkeley.cs.sdb.cellmate.algo.Localizer.LocTracker;
@@ -74,6 +77,22 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
             previewFragment.drawHighlight(name, x, y, size);
         }
 
+    }
+
+    @Override
+    public void onFlowDetected(LinkedList<Point> ptNewFrameList, LinkedList<Point> ptOldFrameList, int width, int height) {
+        PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
+        if (previewFragment != null) {
+            previewFragment.drawFlow(ptNewFrameList, ptOldFrameList, width, height);
+        }
+    }
+
+    @Override
+    public void setGroundTruth(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
+        PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
+        if (previewFragment != null) {
+            previewFragment.setGroundTruth(name, x, y, size);
+        }
     }
 
 
