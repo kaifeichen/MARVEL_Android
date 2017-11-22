@@ -80,23 +80,14 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     }
 
     @Override
-    public void onFlowDetected(LinkedList<Point> ptNewFrameList, LinkedList<Point> ptOldFrameList, int width, int height) {
-        PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
-        if (previewFragment != null) {
-            previewFragment.drawFlow(ptNewFrameList, ptOldFrameList, width, height);
-        }
+    public void resetLocTrackerLinearMoveCount() {
+        mLocTracker.resetLinearMoveCount();
     }
 
     @Override
-    public void setGroundTruth(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
-        PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
-        if (previewFragment != null) {
-            previewFragment.setGroundTruth(name, x, y, size);
-        }
+    public int getLocTrackerLinearMoveCount() {
+        return mLocTracker.getLinearMoveCount();
     }
-
-
-
 
     @Override
     public void previewOnClicked(boolean isTargeting, String target) {
@@ -312,6 +303,10 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
 
     public LocTracker.ImuPose getNearestPoseAndTime(long time) {
         return mLocTracker.getNearestPoseAndTime(time);
+    }
+
+    public LocTracker.ImuPose getNearestPoseAndTimeForOF(long time) {
+        return mLocTracker.getNearestPoseAndTimeForOF(time);
     }
 
     public LocTracker.ImuPose getLatestPoseAndTime() {

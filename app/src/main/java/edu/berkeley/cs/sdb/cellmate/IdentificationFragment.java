@@ -1,6 +1,7 @@
 package edu.berkeley.cs.sdb.cellmate;
 
 import edu.berkeley.cs.sdb.cellmate.algo.Localizer.LocTracker;
+import edu.berkeley.cs.sdb.cellmate.algo.Localizer.OpticalFLowTracker;
 import edu.berkeley.cs.sdb.cellmate.data.KeyFrame;
 import edu.berkeley.cs.sdb.snaplink.*;
 import android.app.Activity;
@@ -65,6 +66,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 
 import edu.berkeley.cs.sdb.cellmate.data.CameraModel;
 import edu.berkeley.cs.sdb.cellmate.data.Label;
@@ -96,8 +98,10 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     private Handler mHandler;
     private boolean mAttached;
     private int REQUEST_INTERVAL = 500;
-    private float mImagePreviewScale = 1;
     private final int ANGLE_DIFF_LIMIT = 40;
+    OpticalFLowTracker opticalFLowTracker;
+
+    private int frameCount;
     LoaderCallbackInterface mLoaderCallback = new LoaderCallbackInterface() {
         @Override
         public void onManagerConnected(int i) {
@@ -129,23 +133,41 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
     long mCurrentPoseMATime;
     Transform mCurrentPoseMA;
+    Transform mCurrentPoseMS;
+
+    //HashMap of {time/queryId, poses including poseAP,poseMI,poseSI at that time}
+    //A entry will be added when a queryMessage is send
+    //A entry will be removed when the queryResult comes back, and it is corrected by locTracker
+    private HashMap<Long, Poses> mPosesMap;
 
 
-    HashMap<Long, Poses> mPosesMap;
+    private Point opticalFlowLabel = null;
+    private Point diff = new Point(0,0);
+    private double diffSquareThresh = 100 * 100;
+    private final double opticalFlowStdThresh = 3;
+    private double opticalFlowConfident = 0;
+    private final int imuCountSquareThread = (2*200*3) * (2*200*3);
+    private double imuConfident = 0;
+    private boolean offloading = false;
 
     StreamObserver<SnapLinkProto.LocalizationResponse> mResponseObserver = new StreamObserver<SnapLinkProto.LocalizationResponse>() {
         @Override
         public void onNext(SnapLinkProto.LocalizationResponse value) {
-            Log.d(LOG_TAG, "TAG_TIME response " + System.currentTimeMillis()); // got response from server
             final Activity activity = getActivity();
             if (activity != null) {
                 activity.runOnUiThread(() -> {
                     try {
+                        offloading = false;
+                        System.out.println("offload back");
+
                         if(!value.getSuccess()) {
                             return;
                         }
-//                        byte[] data = mLatestImageData;
-//                        Bitmap bitmapImage = BitmapFactory.decodeByteArray(data, 0, data.length, null);
+
+                        mStateCallback.resetLocTrackerLinearMoveCount();
+                        opticalFlowConfident = 1;
+                        imuConfident = 1;
+
                         Transform currentPoseMS = null;
                         if(value.getRequestId() > mCurrentPoseMATime) {
                             Transform PoseMI = getPoseFromMessage(value);
@@ -159,7 +181,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                             mCurrentPoseMA = PoseMI.multiply(PoseSIinv).multiply(PosePSinv).multiply(PoseAPinv);
                             Transform currentPoseAP = mStateCallback.getLatestPoseAndTime().pose;
                             currentPoseMS = mCurrentPoseMA.multiply(currentPoseAP).multiply(getPosePS());
-
+                            mCurrentPoseMS = currentPoseMS;
                             if(poses.PoseAPCorected) {
                                 //remove this query event poses if it is corrected by LocTracker already
                                 mPosesMap.remove(value.getRequestId());
@@ -173,6 +195,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                             mPosesMap.remove(value.getRequestId());
                         }
 
+
+
                         ArrayList<String> nameListOld = new ArrayList<>();
                         ArrayList<Float> XListOld = new ArrayList<>();
                         ArrayList<Float> YListOld = new ArrayList<>();
@@ -181,69 +205,13 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
                         mRoomId = value.getDbId();
                         visibility(currentPoseMS, nameListOld, XListOld, YListOld, SizeListOld);
-
-//                        System.out.println("Local visibility result:");
-//                        for(int i = 0; i < nameListOld.size(); i++) {
-//                            System.out.println(nameListOld.get(i) + " " + XListOld.get(i) + " " + YListOld.get(i));
-//                        }
-//                        System.out.println("Remote visibility result:");
-//                        for(int i = 0; i < value.getItemsList().size(); i++) {
-//                            SnapLinkProto.Item item = value.getItemsList().get(i);
-//                            System.out.println(item.getName() + " " + item.getX() + " " + item.getY());
-//                        }
-//
-//                        ArrayList<String> nameList = new ArrayList<>();
-//                        ArrayList<Float> XList = new ArrayList<>();
-//                        ArrayList<Float> YList = new ArrayList<>();
-//                        ArrayList<Float> SizeList = new ArrayList<>();
-//                        visibility(Pmodel1, nameList, XList, YList, SizeList, value.getAngle(),value.getWidth0(), value.getHeight0());
-//                        rotateBack(XList,YList,value.getAngle(),(int)value.getWidth0(), (int)value.getHeight0());
-//                        System.out.println("predicted visibility result:");
-//                        for(int i = 0; i < nameList.size(); i++) {
-//                            System.out.println(nameList.get(i) + " " + XList.get(i) + " " + YList.get(i));
-//                        }
+                        opticalFlowLabel = new Point(XListOld.get(0), YListOld.get(0));
 
 
-//                        String description = "";
-//                        String title = String.valueOf(value.getRequestId());
-//                        description += "id:" + title + "\n";
-//                        description += "Old: \n";
-//                        for (int i = 0; i < nameListOld.size(); i++) {
-//                            description += nameListOld.get(i) + " " + XListOld.get(i) + " " + YListOld.get(i) + " ";
-//                        }
-//                        description += "\n";
-//                        description += "New: \n";
-//                        for (int i = 0; i < nameList.size(); i++) {
-//                            description += nameList.get(i) + " " + XList.get(i) + " " + YList.get(i) + " ";
-//                        }
-//                        description += "\n";
-//
-//                        mDescriptions.add(description);
-
-//                        FileOutputStream fos = null;
-//
-//                        File myPath = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), "/imu/" + title + ".jpg");
-//
-//                        try {
-//                            fos = new FileOutputStream(myPath);
-//                            // Use the compress method on the BitMap object to write image to the OutputStream
-//                            bitmapImage.compress(Bitmap.CompressFormat.JPEG, 100, fos);
-//                        } catch (Exception e) {
-//                            e.printStackTrace();
-//                        } finally {
-//                            try {
-//                                fos.close();
-//                            } catch (IOException e) {
-//                                e.printStackTrace();
-//                            }
-//                        }
-//                        MediaStore.Images.Media.insertImage(getActivity().getContentResolver(), bitmapImage, title , "");
-
-//                        mStateCallback.onObjectIdentified(value.getItemsList(), value.getWidth(), value.getHeight());
                         nameListOld.add("red");
+                        //this function modifying x,y list
                         mStateCallback.onObjectIdentified(nameListOld, XListOld, YListOld, SizeListOld);
-                        mStateCallback.setGroundTruth(nameListOld, XListOld, YListOld, SizeListOld);
-//                        mStateCallback.onObjectIdentified(nameList, XList, YList, SizeList, value.getWidth(), value.getHeight());
+
                     } catch (IllegalStateException e) {
                         //Do nothing
                         //To fix "Fragment ControlFragment{2dab555} not attached to Activity"
@@ -275,11 +243,16 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
 
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
+        //discard first 3 frames. Pretty sure that the first frame is black
+        if(frameCount < 3) {
+            frameCount++;
+            return;
+        }
 
         if (mAttached) {
             System.out.println("ImageReader.OnImageAvailableListener");
-            Long time = System.currentTimeMillis();
 
+            //Update IMU poses
             if(mCurrentPoseMA != null) {
                 Transform currentPoseAP = mStateCallback.getLatestPoseAndTime().pose;
                 Transform currentPoseMS = mCurrentPoseMA.multiply(currentPoseAP).multiply(getPosePS());
@@ -288,24 +261,15 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                 ArrayList<Float> YList = new ArrayList<>();
                 ArrayList<Float> SizeList = new ArrayList<>();
                 visibility(currentPoseMS, nameList, XList, YList, SizeList);
-                Runnable drawingRunnable = new Runnable() {
-                    @Override
-                    public void run() {
-                        mStateCallback.onObjectIdentified(nameList,XList,YList,SizeList);
-                    }
-                };
-                mHandler.post(drawingRunnable);
-
+                mCurrentPoseMS = currentPoseMS;
             }
 
             Image image = reader.acquireLatestImage();
-
-
-            ByteString data;
             if (image == null) {
                 return;
             }
 
+            ByteString data;
             long imageGeneratedTime = image.getTimestamp();
             data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
             image.close();
@@ -315,100 +279,183 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             data.copyTo(mLatestImageData, 0);
             Camera camera = Camera.getInstance();
             int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
-            KeyFrame curFrame = new KeyFrame(mStateCallback.getNearestPoseAndTime(imageGeneratedTime),
+            KeyFrame curFrame = new KeyFrame(
+                    imageGeneratedTime,
+                    mStateCallback.getNearestPoseAndTime(imageGeneratedTime),
                     mLatestImageData,
                     rotateClockwiseAngle);
 
-
-//            Optical Flow
-            mFrameCacheForOF.add(curFrame);
-            if(mFrameCacheForOF.size() >= mFrameCacheForOFLimit) {
-                KeyFrame firstFrame = mFrameCacheForOF.get(0);
-
-                //choose which frame in cache to do optical flow, record it as next anchor frame
-                int index;
-                for(index = mFrameCacheForOF.size() - 1; index > 1; index--) {
-                    KeyFrame frame_i =  mFrameCacheForOF.get(index);
-                    double angleDiff = frame_i.angleDiffInDegree(firstFrame);
-                    boolean isBlur = curFrame.isBlur();
-                    if(angleDiff > ANGLE_DIFF_LIMIT || isBlur) {
-                        continue;
-                    } else {
-                        break;
-                    }
+            //Calculate correct label position and draw
+            Runnable calculateAndDrawRunnable = new Runnable() {
+                @Override
+                public void run() {
+                    //Calculate correct label position and draw
+                    CalculateLabelAndDraw(curFrame);
                 }
-
-                //Keep on popping the cache to the newest anchor frame
-                for(int j = 0; j < index; j++) {
-                    mFrameCacheForOF.remove(0);
-                }
-
-                //doing the optical flow
-                Runnable opticalFlowRunnable = new Runnable() {
-                    @Override
-                    public void run() {
-                        opticalFlow(mFrameCacheForOF.get(0).getData());
-                    }
-                };
-                mHandler.post(opticalFlowRunnable);
-            }
-//
-//            Runnable opticalFlowRunnable = new Runnable() {
-//                @Override
-//                public void run() {
-//                    opticalFlow(mLatestImageData);
-//                }
-//            };
-//            mHandler.post(opticalFlowRunnable);
-
+            };
+            mHandler.post(calculateAndDrawRunnable);
 
             //Offloading
             mFrameCache.add(curFrame);
             if(mFrameCache.size() > mFrameCacheLimit) {
                 mFrameCache.remove(0);
             }
-
-            if (time - mLastTime > REQUEST_INTERVAL) {
-                Runnable senderRunnable = new Runnable() {
-                    @Override
-                    public void run() {
-                        sortFramesToFindBest();
-                        KeyFrame frameToSend = mFrameCache.get(0);
-                        Transform pose = frameToSend.getImuPose().pose;
-                        mPosesMap.put(frameToSend.getImuPose().time, new Poses(false,pose,null,getPoseSI()));
-
-                        List<ByteString> datas = new ArrayList<>();
-                        List<Integer> rotateClockwiseAngles =  new ArrayList<>();
-                        List<Long> times =  new ArrayList<>();
-                        List<Float> blurness = new ArrayList<>();
-                        List<SnapLinkProto.Matrix> poses = new ArrayList<>();
-
-
-                        for(int i = 0; i < mFrameCache.size(); i++) {
-                            datas.add(ByteString.copyFrom(mFrameCache.get(i).getData()));
-                            rotateClockwiseAngles.add(mFrameCache.get(i).getmRotateClockwiseAngle());
-                            times.add(mFrameCache.get(i).getImuPose().time);
-                            blurness.add((float)i);
-                            mFrameCache.get(i).getImuPose().pose.print();
-                            poses.add(getMessageMatrixFromPose(mFrameCache.get(i).getImuPose().pose));
-                        }
-
-                        sendRequestToServer(datas, rotateClockwiseAngles, times, blurness, poses);
-
-                    }
-                };
-                mHandler.post(senderRunnable);
-                mLastTime = time;
-            } else {
-                try {
-                    image.close();
-                } catch (NullPointerException e) {
-
-                }
-
-            }
         }
     };
+
+    private void offLoad() {
+        if(offloading) {
+            return;
+        }
+        Runnable senderRunnable = new Runnable() {
+            @Override
+            public void run() {
+                offloading = true;
+                System.out.println("offload");
+                sortFramesToFindBest();
+                KeyFrame frameToSend = mFrameCache.get(0);
+                Transform pose = frameToSend.getImuPose().pose;
+                mPosesMap.put(frameToSend.getImuPose().time, new Poses(false,pose,null,getPoseSI()));
+
+                List<ByteString> datas = new ArrayList<>();
+                List<Integer> rotateClockwiseAngles =  new ArrayList<>();
+                List<Long> times =  new ArrayList<>();
+                List<Float> blurness = new ArrayList<>();
+                List<SnapLinkProto.Matrix> poses = new ArrayList<>();
+
+
+                for(int i = 0; i < mFrameCache.size(); i++) {
+                    datas.add(ByteString.copyFrom(mFrameCache.get(i).getData()));
+                    rotateClockwiseAngles.add(mFrameCache.get(i).getmRotateClockwiseAngle());
+                    times.add(mFrameCache.get(i).getImuPose().time);
+                    blurness.add((float)i);
+                    mFrameCache.get(i).getImuPose().pose.print();
+                    poses.add(getMessageMatrixFromPose(mFrameCache.get(i).getImuPose().pose));
+                }
+
+                sendRequestToServer(datas, rotateClockwiseAngles, times, blurness, poses);
+
+            }
+        };
+        mHandler.post(senderRunnable);
+    }
+
+    private void CalculateLabelAndDraw(KeyFrame curFrame) {
+        //Can't do this in onCreate or onResume because at that time the openCV loader is not loded yet
+        if(opticalFLowTracker == null) {
+            opticalFLowTracker = new OpticalFLowTracker();
+        }
+
+
+        //opticalFlow
+        List<Point> oldFramePoints = null;
+        List<Point> newFramePoints = null;
+        mFrameCacheForOF.add(curFrame);
+        if(mFrameCacheForOF.size() >= mFrameCacheForOFLimit) {
+            KeyFrame firstFrame = mFrameCacheForOF.get(0);
+
+            //choose which frame in cache to do optical flow, record it as next anchor frame
+            int index;
+            for(index = mFrameCacheForOF.size() - 1; index > 1; index--) {
+                KeyFrame frame_i =  mFrameCacheForOF.get(index);
+                double angleDiff = frame_i.angleDiffInDegree(firstFrame);
+                boolean isBlur = curFrame.isBlur();
+                if(angleDiff > ANGLE_DIFF_LIMIT || isBlur) {
+                    continue;
+                } else {
+                    break;
+                }
+            }
+
+            //Keep on popping the cache to the newest anchor frame
+            for(int j = 0; j < index; j++) {
+                mFrameCacheForOF.remove(0);
+            }
+
+            //doing the optical flow
+            //this will take a while
+            opticalFLowTracker.trackFlow(mFrameCacheForOF.get(0));
+            oldFramePoints = opticalFLowTracker.getOldFramePoints();
+            newFramePoints = opticalFLowTracker.getNewFramePoints();
+        }
+
+
+        //Calculating diff (difference between IMU label and IMU+opticalFlow label)
+        if(oldFramePoints == null) {
+            //didn't do opticalFlow
+            //diff remain unchanged
+        } else {
+            //opticalFlow is performed, we can update diff now
+            if(opticalFlowLabel != null) {
+                List<Integer> closestNPoints = nearestNPointIndex(oldFramePoints, opticalFlowLabel, newFramePoints);
+                if(closestNPoints == null) {
+                    opticalFlowConfident = 0;
+                } else {
+                    //this function also update opticalFlow confident
+                    opticalFlowLabel = predictLabelWithNearestPoints(closestNPoints,oldFramePoints, opticalFlowLabel, newFramePoints);
+                }
+                updateImuConfident();
+                if(opticalFlowConfident == 0) {
+                    //std showing OF inaccurate, probably need to offload to server to calibrate
+                    diff = new Point(0,0);
+                } else {
+                    //Calcluate IMU label, then diff
+                    long t0 = curFrame.getFrameTime();
+                    Transform poseAP_t0 = mStateCallback.getNearestPoseAndTimeForOF(t0).pose;
+                    Transform poseMS_t0 = mCurrentPoseMA.multiply(poseAP_t0.multiply(getPosePS()));
+                    ArrayList<String> nameList = new ArrayList<>();
+                    ArrayList<Float> XList = new ArrayList<>();
+                    ArrayList<Float> YList = new ArrayList<>();
+                    ArrayList<Float> SizeList = new ArrayList<>();
+                    visibility(poseMS_t0, nameList, XList, YList, SizeList);
+                    Point imuLabel = new Point(XList.get(0), YList.get(0));
+                    double totalConfident = imuConfident + opticalFlowConfident;
+                    double imuWeight = imuConfident/totalConfident;
+                    double opticalFlowWeight = opticalFlowConfident/totalConfident;
+                    double weightedX = imuLabel.x * imuWeight + opticalFlowLabel.x * opticalFlowWeight;
+                    double weightedY = imuLabel.y * imuWeight + opticalFlowLabel.y * opticalFlowWeight;
+                    Point combinedLabel = new Point(weightedX, weightedY);
+                    diff = new Point(imuLabel.x - combinedLabel.x, imuLabel.y - combinedLabel.y);
+                }
+            } else {
+                diff = new Point(0,0);
+            }
+        }
+
+        if(opticalFlowConfident == 0 && imuConfident == 0) {
+            System.out.println("case 1 offload");
+            offLoad();
+        } else if((Math.pow(diff.x,2) + Math.pow(diff.y,2)) > diffSquareThresh) {
+            System.out.println("case 2 offload");
+            offLoad();
+        }
+
+        //apply diff to IMU_Label_t1
+        if(mCurrentPoseMS != null) {
+            ArrayList<String> nameList = new ArrayList<>();
+            ArrayList<Float> XList = new ArrayList<>();
+            ArrayList<Float> YList = new ArrayList<>();
+            ArrayList<Float> SizeList = new ArrayList<>();
+            visibility(mCurrentPoseMS, nameList, XList, YList, SizeList);
+            if(nameList.get(0) != "None") {
+                XList.set(0, XList.get(0) - (float)diff.x);
+                YList.set(0, YList.get(0) - (float)diff.y);
+            }
+            mStateCallback.onObjectIdentified(nameList, XList, YList, SizeList);
+        }
+
+
+    }
+
+    private void updateImuConfident() {
+        int count = mStateCallback.getLocTrackerLinearMoveCount();
+        int countSquare = count*count;
+        if(countSquare > imuCountSquareThread) {
+            imuConfident = 0;
+        } else {
+            imuConfident = 1 - (countSquare / imuCountSquareThread);
+        }
+    }
 
     Comparator<KeyFrame> gyroComparator = new Comparator<KeyFrame>() {
         @Override
@@ -584,15 +631,12 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         Camera camera = Camera.getInstance();
         Size captureSize = camera.getCaptureSize();
         Size previewSize = camera.getPreviewSize();
-        mImagePreviewScale = (float)Math.min(captureSize.getWidth(), captureSize.getHeight())/(float)Math.min(previewSize.getWidth(), previewSize.getHeight());
         mImageReader = ImageReader.newInstance(captureSize.getWidth(), captureSize.getHeight(),
                 ImageFormat.JPEG, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(
                 mOnImageAvailableListener, null);
         mHandler = new Handler();
         System.out.println("onViewCreated");
-
-
     }
 
     @Override
@@ -656,6 +700,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         Camera camera = Camera.getInstance();
         Log.i("CellMate", "control fragment register++++");
         camera.registerPreviewSurface(mImageReader.getSurface());
+        frameCount = 0;
     }
 
     @Override
@@ -729,7 +774,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         float height = Math.max(previewSize.getWidth(),previewSize.getHeight());
         CameraModel camera = new CameraModel("CameraModel",
                 new Size((int)width,(int)height),
-                mFx/mImagePreviewScale, mFy/mImagePreviewScale, Math.min(mCx,mCy)/mImagePreviewScale, Math.max(mCx,mCy)/mImagePreviewScale);
+                mFx, mFy, Math.min(mCx,mCy), Math.max(mCx,mCy));
         if (mLabels.get(mRoomId).isEmpty()) {
             return;
         }
@@ -807,10 +852,11 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
     public interface StateCallback {
         void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size);
-        void setGroundTruth(List<String> name, List<Float> x, List<Float> y, List<Float> size);
         LocTracker.ImuPose getNearestPoseAndTime(long time);
+        LocTracker.ImuPose getNearestPoseAndTimeForOF(long time);
         LocTracker.ImuPose getLatestPoseAndTime();
-        void onFlowDetected(LinkedList<Point> ptNewFrameList, LinkedList<Point> ptOldFrameList, int width, int height);
+        void resetLocTrackerLinearMoveCount();
+        int getLocTrackerLinearMoveCount();
     }
 
 
@@ -884,144 +930,95 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         }
     }
 
-    private Mat mRgba, mErodeKernel, matOpFlowPrev, matOpFlowThis;
-    private MatOfFloat mMOFerr;
-    private MatOfByte mMOBStatus;
-    private MatOfPoint2f mMOP2fptsPrev = null, mMOP2fptsThis, mMOP2fptsSafe;
-    private MatOfPoint MOPcorners;
-    private int x, y, iLineThickness = 3, iGFFTMax = 200;
-    private List<Point> cornersThis, cornersPrev;
-    private List<Byte> byteStatus;
-    private Point pt, pt2;
 
-    private void opticalFlow(byte[] data) {
-        //Variables for opencv optical flow
-        if(mMOP2fptsPrev == null) {
-            mMOP2fptsPrev = new MatOfPoint2f();
-            mMOP2fptsThis = new MatOfPoint2f();
-            mMOP2fptsSafe = new MatOfPoint2f();
-            mMOFerr = new MatOfFloat();
-            mMOBStatus = new MatOfByte();
-            MOPcorners = new MatOfPoint();
-            mRgba = new Mat();
-            matOpFlowThis = new Mat();
-            matOpFlowPrev = new Mat();
-            cornersThis = new ArrayList<>();
-            cornersPrev = new ArrayList<>();
-            pt = new Point(0, 0);
-            pt2 = new Point(0, 0);
+    private final int NEIGHBOR_COUNT = 5;
+
+    private List<Integer> nearestNPointIndex(List<Point> points, Point target, List<Point> points2) {
+        if(points.size() < NEIGHBOR_COUNT) {
+            return null;
+        }
+        PriorityQueue<Integer> pointsQueue = new PriorityQueue<>(points.size(),new Comparator<Integer>() {
+            @Override
+            public int compare(Integer integer, Integer t1) {
+                Point pt = points.get(integer.intValue());
+                double distSquare = (target.x - pt.x) * (target.x - pt.x) + (target.y - pt.y) * (target.y - pt.y);
+                Point pt2 = points.get(t1.intValue());
+                double distSquare2 = (target.x - pt2.x) * (target.x - pt2.x) + (target.y - pt2.y) * (target.y - pt2.y);
+                if(distSquare < distSquare2) {
+                    return -1;
+                } else if (distSquare == distSquare2) {
+                    return 0;
+                } else {
+                    return 1;
+                }
+            }
+        });
+
+        for(int i = 0; i < points.size(); i++) {
+            pointsQueue.add(i);
         }
 
-        long time = System.currentTimeMillis();
+        List<Integer> closestNPointsIndex = new ArrayList<>();
 
 
-        mRgba = Imgcodecs.imdecode(new MatOfByte(data), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
-        System.out.println("decode time" + (System.currentTimeMillis() - time));
+        for(int i = 0; i < NEIGHBOR_COUNT; i++) {
+            closestNPointsIndex.add(pointsQueue.remove());
+        }
 
-        long beforeRotateTime = System.currentTimeMillis();
-        Camera camera = Camera.getInstance();
-        int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
-        int orientation = 1;
-        if(rotateClockwiseAngle == 90) {
-            orientation = 8;
-        } else if(rotateClockwiseAngle == 180) {
-            orientation = 3;
-        } else if(rotateClockwiseAngle == 270) {
-            orientation = 6;
+
+        return closestNPointsIndex;
+    }
+
+    private Point predictLabelWithNearestPoints(List<Integer> closestNPointsIndex, List<Point> points, Point target, List<Point> points2) {
+        List<Double> predictedXList = new ArrayList<>();
+        List<Double> predictedYList = new ArrayList<>();
+        for(int index : closestNPointsIndex) {
+            Point pt = points.get(index);
+            Point pt2 = points2.get(index);
+            double deltaX = pt.x - target.x;
+            double newX = pt2.x - deltaX;
+            predictedXList.add(newX);
+            double deltaY = pt.y - target.y;
+            double newY = pt2.y - deltaY;
+            predictedYList.add(newY);
+        }
+        System.out.println("std is " + (std(predictedXList) + std(predictedYList)));
+        if(std(predictedXList) + std(predictedYList) > opticalFlowStdThresh) {
+            opticalFlowConfident = 0;
         } else {
-            orientation = 1;
+            opticalFlowConfident = 1 -  (std(predictedXList) + std(predictedYList)) / opticalFlowStdThresh;
         }
-        mRgba = rotateImage(mRgba, orientation);
-        System.out.println("rotate time" + (System.currentTimeMillis() - beforeRotateTime));
+        return new Point(mean(predictedXList), mean(predictedYList));
+    }
 
-
-        if (mMOP2fptsPrev.rows() == 0) {
-
-            //Log.d("Baz", "First time opflow");
-            // first time through the loop so we need prev and this mats
-            // plus prev points
-            // get this mat
-            Imgproc.cvtColor(mRgba, matOpFlowThis, Imgproc.COLOR_RGBA2GRAY);
-
-            // copy that to prev mat
-            matOpFlowThis.copyTo(matOpFlowPrev);
-
-            // get prev corners
-            Imgproc.goodFeaturesToTrack(matOpFlowPrev, MOPcorners, iGFFTMax, 0.05, 10);
-            mMOP2fptsPrev.fromArray(MOPcorners.toArray());
-
-            // get safe copy of this corners
-            mMOP2fptsPrev.copyTo(mMOP2fptsSafe);
+    private double mean(List<Double> values) {
+        double total = 0;
+        for(double val : values) {
+            total += val;
         }
-        else
-        {
-            //Log.d("Baz", "Opflow");
-            // we've been through before so
-            // this mat is valid. Copy it to prev mat
-            matOpFlowThis.copyTo(matOpFlowPrev);
-
-            // get this mat
-            Imgproc.cvtColor(mRgba, matOpFlowThis, Imgproc.COLOR_RGBA2GRAY);
-
-            // get the corners for this mat
-            Imgproc.goodFeaturesToTrack(matOpFlowThis, MOPcorners, iGFFTMax, 0.05, 10);
-            mMOP2fptsThis.fromArray(MOPcorners.toArray());
-
-            // retrieve the corners from the prev mat
-            // (saves calculating them again)
-            mMOP2fptsSafe.copyTo(mMOP2fptsPrev);
-
-            // and save this corners for next time through
-
-            mMOP2fptsThis.copyTo(mMOP2fptsSafe);
+        return  total/values.size();
+    }
+    private double std(List<Double> values) {
+       double mu = mean(values);
+        double variance = 0;
+        for(double val : values) {
+            variance += Math.pow(val - mu, 2);
         }
+        return Math.pow(variance/values.size(), 0.5);
+    }
 
-
-        /*
-        Parameters:
-            prevImg first 8-bit input image
-            nextImg second input image
-            prevPts vector of 2D points for which the flow needs to be found; point coordinates must be single-precision floating-point numbers.
-            nextPts output vector of 2D points (with single-precision floating-point coordinates) containing the calculated new positions of input features in the second image; when OPTFLOW_USE_INITIAL_FLOW flag is passed, the vector must have the same size as in the input.
-            status output status vector (of unsigned chars); each element of the vector is set to 1 if the flow for the corresponding features has been found, otherwise, it is set to 0.
-            err output vector of errors; each element of the vector is set to an error for the corresponding feature, type of the error measure can be set in flags parameter; if the flow wasn't found then the error is not defined (use the status parameter to find such cases).
-        */
-        Video.calcOpticalFlowPyrLK(matOpFlowPrev, matOpFlowThis, mMOP2fptsPrev, mMOP2fptsThis, mMOBStatus, mMOFerr);
-
-        cornersPrev = mMOP2fptsPrev.toList();
-        cornersThis = mMOP2fptsThis.toList();
-        byteStatus = mMOBStatus.toList();
-
-        y = byteStatus.size() - 1;
-
-
-        LinkedList<Point> ptNewFrame = new LinkedList<>();
-        LinkedList<Point> ptOldFrame = new LinkedList<>();
-
-        for (x = 0; x < y; x++) {
-            if (byteStatus.get(x) == 1) {
-                pt = cornersThis.get(x);
-                pt2 = cornersPrev.get(x);
-                ptNewFrame.add(pt);
-                ptOldFrame.add(pt2);
+    private int nearestPointIndex(List<Point> points, Point target) {
+        double minDistSquare = Double.MAX_VALUE;
+        int minIndex = 0;
+        for(int i = 0; i < points.size(); i++) {
+            Point pt = points.get(i);
+            double distSquare = (target.x - pt.x) * (target.x - pt.x) + (target.y - pt.y) * (target.y - pt.y);
+            if(distSquare < minDistSquare) {
+                minIndex = i;
+                minDistSquare = distSquare;
             }
         }
-
-        mStateCallback.onFlowDetected(ptNewFrame, ptOldFrame, mRgba.width(), mRgba.height());
-        System.out.println("optical flow uses " + (System.currentTimeMillis() - time) + "ms" );
+        System.out.println("nearest point index = " + minIndex + " in one");
+        return minIndex;
     }
-
-    Mat rotateImage(Mat img, int orientation) {
-        if (orientation == 8) { // 90
-            Core.transpose(img, img);
-            Core.flip(img, img, 1);
-        } else if (orientation == 3) { // 180
-            Core.flip(img, img, -1);
-        } else if (orientation == 6) { // 270
-            Core.transpose(img, img);
-            Core.flip(img, img, 0);
-        }
-        return img;
-    }
-
 }

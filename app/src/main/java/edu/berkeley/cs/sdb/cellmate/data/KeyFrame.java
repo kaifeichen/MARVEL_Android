@@ -13,6 +13,7 @@ import edu.berkeley.cs.sdb.cellmate.algo.Localizer.LocTracker;
  */
 
 public class KeyFrame {
+    private long mFrameTime;
     private LocTracker.ImuPose mImuPose;
     private int mNumOfEdges = -1;
     private float mGyroNorm = -1;
@@ -24,7 +25,8 @@ public class KeyFrame {
     private final float GYRO_NORM_UPPER_LIMIT = 0.5f;
     private final int NUM_EDGES_LOWER_LIMIT = 500000;
 
-    public KeyFrame(LocTracker.ImuPose imuPose, byte[] Data, int rotateClockwiseAngle) {
+    public KeyFrame(long time, LocTracker.ImuPose imuPose, byte[] Data, int rotateClockwiseAngle) {
+        mFrameTime = time;
         mImuPose = imuPose;
         mData = Data;
         mRotateClockwiseAngle = rotateClockwiseAngle;
@@ -103,6 +105,14 @@ public class KeyFrame {
 
     public int setRank(int rank) {
         return mRank = rank;
+    }
+
+    public void setFrameTime(long time) {
+        mFrameTime = time;
+    }
+
+    public long getFrameTime() {
+        return mFrameTime;
     }
 
     public double angleDiffInDegree(KeyFrame other) {
