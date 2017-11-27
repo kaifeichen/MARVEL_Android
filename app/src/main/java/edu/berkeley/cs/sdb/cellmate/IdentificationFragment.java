@@ -50,7 +50,7 @@ import org.opencv.core.Point;
 import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.video.Video;
-
+import org.w3c.dom.NameList;
 
 
 import java.io.File;
@@ -134,6 +134,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     long mCurrentPoseMATime;
     Transform mCurrentPoseMA;
     Transform mCurrentPoseMS;
+    boolean stancePhaseJustCorrected = false;
 
     //HashMap of {time/queryId, poses including poseAP,poseMI,poseSI at that time}
     //A entry will be added when a queryMessage is send
@@ -146,7 +147,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     private double diffSquareThresh = 100 * 100;
     private final double opticalFlowStdThresh = 3;
     private double opticalFlowConfident = 0;
-    private final int imuCountSquareThread = (2*200*3) * (2*200*3);
+    private final double imuCountThread = 200;
     private double imuConfident = 0;
     private boolean offloading = false;
 
@@ -165,8 +166,11 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                         }
 
                         mStateCallback.resetLocTrackerLinearMoveCount();
+                        double oldOpticalFlowConfident = opticalFlowConfident;
                         opticalFlowConfident = 1;
                         imuConfident = 1;
+
+
 
                         Transform currentPoseMS = null;
                         if(value.getRequestId() > mCurrentPoseMATime) {
@@ -206,6 +210,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                         mRoomId = value.getDbId();
                         visibility(currentPoseMS, nameListOld, XListOld, YListOld, SizeListOld);
                         opticalFlowLabel = new Point(XListOld.get(0), YListOld.get(0));
+                        System.out.println("opticalFlowLabel onNext" + opticalFlowLabel.x + "  " + opticalFlowLabel.y);
+
 
 
                         nameListOld.add("red");
@@ -261,6 +267,12 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                 ArrayList<Float> YList = new ArrayList<>();
                 ArrayList<Float> SizeList = new ArrayList<>();
                 visibility(currentPoseMS, nameList, XList, YList, SizeList);
+                if(stancePhaseJustCorrected) {
+                    opticalFlowLabel = new Point(XList.get(0), YList.get(0));
+                    System.out.println("opticalFlowLabel stancePhaseCorrection " + opticalFlowLabel.x + "  " + opticalFlowLabel.y );
+                    stancePhaseJustCorrected = false;
+                    diff = new Point(0,0);
+                }
                 mCurrentPoseMS = currentPoseMS;
             }
 
@@ -340,6 +352,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         mHandler.post(senderRunnable);
     }
 
+    Point diff1;
+
     private void CalculateLabelAndDraw(KeyFrame curFrame) {
         //Can't do this in onCreate or onResume because at that time the openCV loader is not loded yet
         if(opticalFLowTracker == null) {
@@ -380,6 +394,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         }
 
 
+        Point imuLabel_past = null;
         //Calculating diff (difference between IMU label and IMU+opticalFlow label)
         if(oldFramePoints == null) {
             //didn't do opticalFlow
@@ -392,7 +407,12 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                     opticalFlowConfident = 0;
                 } else {
                     //this function also update opticalFlow confident
+                    System.out.println("opticalFlowLabel pre " + opticalFlowLabel.x + "  " + opticalFlowLabel.y );
                     opticalFlowLabel = predictLabelWithNearestPoints(closestNPoints,oldFramePoints, opticalFlowLabel, newFramePoints);
+                    System.out.println("opticalFlowLabel aft " + opticalFlowLabel.x + "  " + opticalFlowLabel.y );
+                    System.out.println("opticalFlowLabel **************************************************");
+
+
                 }
                 updateImuConfident();
                 if(opticalFlowConfident == 0) {
@@ -409,6 +429,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                     ArrayList<Float> SizeList = new ArrayList<>();
                     visibility(poseMS_t0, nameList, XList, YList, SizeList);
                     Point imuLabel = new Point(XList.get(0), YList.get(0));
+                    imuLabel_past = imuLabel;
                     double totalConfident = imuConfident + opticalFlowConfident;
                     double imuWeight = imuConfident/totalConfident;
                     double opticalFlowWeight = opticalFlowConfident/totalConfident;
@@ -416,6 +437,18 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                     double weightedY = imuLabel.y * imuWeight + opticalFlowLabel.y * opticalFlowWeight;
                     Point combinedLabel = new Point(weightedX, weightedY);
                     diff = new Point(imuLabel.x - combinedLabel.x, imuLabel.y - combinedLabel.y);
+
+                    if(mCurrentPoseMS != null) {
+                        ArrayList<String> nameList1 = new ArrayList<>();
+                        ArrayList<Float> XList1 = new ArrayList<>();
+                        ArrayList<Float> YList1 = new ArrayList<>();
+                        ArrayList<Float> SizeList1 = new ArrayList<>();
+                        visibility(mCurrentPoseMS, nameList1, XList1, YList1, SizeList1);
+                        if(nameList1.get(0) != "None") {
+                            diff1 = new Point(XList1.get(0) - XList.get(0), YList1.get(0) - YList.get(0));
+                        }
+                    }
+
                 }
             } else {
                 diff = new Point(0,0);
@@ -437,10 +470,66 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             ArrayList<Float> YList = new ArrayList<>();
             ArrayList<Float> SizeList = new ArrayList<>();
             visibility(mCurrentPoseMS, nameList, XList, YList, SizeList);
+
+//            use opticalflow_past and imu_past to update imu_now
             if(nameList.get(0) != "None") {
-                XList.set(0, XList.get(0) - (float)diff.x);
-                YList.set(0, YList.get(0) - (float)diff.y);
+                nameList.add("corrected");
+                XList.add(XList.get(0) - (float)diff.x);
+                YList.add(YList.get(0) - (float)diff.y);
+                SizeList.add(SizeList.get(0));
+                nameList.add("optFlow");
+                XList.add((float)opticalFlowLabel.x);
+                YList.add((float)opticalFlowLabel.y);
+                SizeList.add(SizeList.get(0));
+                if(imuLabel_past!=null) {
+                    nameList.add("imu_past");
+                    XList.add((float)imuLabel_past.x);
+                    YList.add((float)imuLabel_past.y);
+                    SizeList.add(SizeList.get(0));
+                }
             }
+
+            //Use opticalflow_past and imu_now
+//            if(nameList.get(0) != "None") {
+//                XList.set(0, (XList.get(0) + (float)opticalFlowLabel.x)/2);
+//                YList.set(0, (YList.get(0) + (float)opticalFlowLabel.y)/2);
+//            }
+
+//            Use purely optical flow
+//            if(nameList.get(0) != "None") {
+//                XList.set(0, (float)opticalFlowLabel.x);
+//                YList.set(0, (float)opticalFlowLabel.y);
+//            }
+
+
+//            if(opticalFlowConfident != 0) {
+//                if(diff1!=null) {
+//                    System.out.println("aaaa1");
+//                    if(nameList.get(0) != "None") {
+//                        System.out.println("aaaa2");
+//                        nameList.set(0, "of");
+//                        XList.set(0, (float)opticalFlowLabel.x);
+//                        YList.set(0, (float)opticalFlowLabel.y);
+//                        nameList.add("of_cor");
+//                        XList.add((float)opticalFlowLabel.x + (float)diff1.x);
+//                        YList.add((float)opticalFlowLabel.y + (float)diff1.y);
+//                        SizeList.add(SizeList.get(0));
+//                        System.out.print("sizes :" + nameList.size() + " " + XList.size());
+//                        nameList.add("red");
+//
+//                    }
+//                }
+//            } else {
+//
+//                System.out.println("aaaa3");
+//                updateImuConfident();
+//                if(imuConfident < 0.3) {
+//                    offLoad();
+//                }
+//            }
+
+
+            System.out.println("aaaa4");
             mStateCallback.onObjectIdentified(nameList, XList, YList, SizeList);
         }
 
@@ -449,11 +538,10 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
     private void updateImuConfident() {
         int count = mStateCallback.getLocTrackerLinearMoveCount();
-        int countSquare = count*count;
-        if(countSquare > imuCountSquareThread) {
+        if(count > imuCountThread) {
             imuConfident = 0;
         } else {
-            imuConfident = 1 - (countSquare / imuCountSquareThread);
+            imuConfident = 1 - (count / imuCountThread);
         }
     }
 
@@ -920,6 +1008,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                         Transform PosePSinv0 = getPosePS().inverse();
                         mCurrentPoseMATime = node.time;
                         mCurrentPoseMA = poses.PoseMI.multiply(PoseSIinv0).multiply(PosePSinv0).multiply(PoseAPinv);
+                        stancePhaseJustCorrected = true;
                     }
                     removingEntries.add(node.time);
                 }
@@ -986,7 +1075,10 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         if(std(predictedXList) + std(predictedYList) > opticalFlowStdThresh) {
             opticalFlowConfident = 0;
         } else {
-            opticalFlowConfident = 1 -  (std(predictedXList) + std(predictedYList)) / opticalFlowStdThresh;
+            double newConfident = 1 -  (std(predictedXList) + std(predictedYList)) / opticalFlowStdThresh;
+            if(newConfident < opticalFlowConfident) {
+                opticalFlowConfident = newConfident;
+            }
         }
         return new Point(mean(predictedXList), mean(predictedYList));
     }

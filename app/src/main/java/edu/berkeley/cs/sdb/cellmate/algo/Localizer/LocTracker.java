@@ -95,12 +95,16 @@ public class LocTracker implements SensorEventListener {
             mTimestamps.add(time);
             mLinearAcc = rotateVec(mRotMat, mLinearAcc);
 
+            boolean linearMove = false;
             for (int i = 0; i < mLinearAcc.length; i++) {
                 if (abs(mLinearAcc[i]) < ACC_THRESHOLD) {
                     mLinearAcc[i] = 0.0f;
-                } else {
-                    mLinearMoveCount += 1;
+                }  else {
+                    linearMove = true;
                 }
+            }
+            if(linearMove) {
+                mLinearMoveCount += 1;
             }
             mLinearAccs.add(mLinearAcc);
             updateIMU(event.timestamp);

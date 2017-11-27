@@ -231,15 +231,22 @@ public class PreviewFragment extends Fragment {
 
 
 
+    int col = Color.BLUE;
+
     public void drawHighlight(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
         final Activity activity = getActivity();
         if (activity != null) {
             activity.runOnUiThread(() -> {
-                int col = Color.BLUE;
+
                 if(name.get(name.size()-1).compareTo("red") == 0) {
                     name.remove(name.size()-1);
-                    col = Color.RED;
+                    if(col == Color.BLUE) {
+                        col = Color.RED;
+                    } else {
+                        col = Color.BLUE;
+                    }
                 }
+
                 if (x.get(0) != -1) {
                     double width = Math.min(mPreviewSize.getWidth(), mPreviewSize.getHeight());
                     double height = Math.max(mPreviewSize.getWidth(), mPreviewSize.getHeight());
@@ -248,6 +255,7 @@ public class PreviewFragment extends Fragment {
                     Paint paint = new Paint();
                     paint.setColor(col);
                     paint.setStyle(Paint.Style.STROKE);
+//                    paint.setStyle(Paint.Style.FILL);
                     if (mBmp != null && !mBmp.isRecycled()) {
                         mBmp.recycle();
                     }
@@ -287,9 +295,20 @@ public class PreviewFragment extends Fragment {
                         canvas.drawRect(rect4, paint);
                         canvas.drawRect(rect5, paint);
                         Rect rect = new Rect(mLeft.get(i).intValue(), mTop.get(i).intValue(), mRight.get(i).intValue(), mBottom.get(i).intValue());
-                        canvas.drawRect(rect, paint);
-                        paint.setTextSize(size.get(i).floatValue()/mScale);
-                        canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
+                        if(i == 0) {
+                            int oldColor = paint.getColor();
+                            paint.setColor(Color.GREEN);
+                            canvas.drawRect(rect, paint);
+                            paint.setTextSize(size.get(i).floatValue()/mScale);
+                            canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
+                            paint.setColor(oldColor);
+                        } else {
+                            canvas.drawRect(rect, paint);
+                            paint.setTextSize(size.get(i).floatValue()/mScale);
+                            canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
+                        }
+
+
                     }
 
                     mHighLight.setImageBitmap(mBmp);
