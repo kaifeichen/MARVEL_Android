@@ -309,6 +309,10 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
         return mLocTracker.getNearestPoseAndTimeForOF(time);
     }
 
+    public LocTracker.ImuPose getNearestPoseAndTimeForOF2(long time) {
+        return mLocTracker.getNearestPoseAndTimeForOF(time);
+    }
+
     public LocTracker.ImuPose getLatestPoseAndTime() {
         return mLocTracker.getLatestPoseAndTime();
     }

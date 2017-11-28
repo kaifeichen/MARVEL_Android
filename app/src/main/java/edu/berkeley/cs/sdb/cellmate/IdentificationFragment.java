@@ -198,6 +198,18 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                             //remove this query event poses if it is outdated
                             mPosesMap.remove(value.getRequestId());
                         }
+                        mRoomId = value.getDbId();
+
+                        //Set Optical flow label position
+                        long ofTime = SystemClock.elapsedRealtimeNanos()-mImageDelayedTime;
+                        Transform ofPoseAP = mStateCallback.getNearestPoseAndTimeForOF2(ofTime).pose;
+                        Transform ofPoseMS = mCurrentPoseMA.multiply(ofPoseAP).multiply(getPosePS());
+                        ArrayList<String> ofNameListOld = new ArrayList<>();
+                        ArrayList<Float> ofXListOld = new ArrayList<>();
+                        ArrayList<Float> ofYListOld = new ArrayList<>();
+                        ArrayList<Float> ofSizeListOld = new ArrayList<>();
+                        visibility(ofPoseMS, ofNameListOld, ofXListOld, ofYListOld, ofSizeListOld);
+                        opticalFlowLabel = new Point(ofXListOld.get(0), ofYListOld.get(0));
 
 
 
@@ -206,14 +218,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                         ArrayList<Float> YListOld = new ArrayList<>();
                         ArrayList<Float> SizeListOld = new ArrayList<>();
 
-
-                        mRoomId = value.getDbId();
                         visibility(currentPoseMS, nameListOld, XListOld, YListOld, SizeListOld);
-                        opticalFlowLabel = new Point(XListOld.get(0), YListOld.get(0));
-                        System.out.println("opticalFlowLabel onNext" + opticalFlowLabel.x + "  " + opticalFlowLabel.y);
-
-
-
                         nameListOld.add("red");
                         //this function modifying x,y list
                         mStateCallback.onObjectIdentified(nameListOld, XListOld, YListOld, SizeListOld);
@@ -247,6 +252,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         }
     };
 
+    private long mImageDelayedTime = 0;
 
     private final ImageReader.OnImageAvailableListener mOnImageAvailableListener = (ImageReader reader) -> {
         //discard first 3 frames. Pretty sure that the first frame is black
@@ -283,6 +289,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
             ByteString data;
             long imageGeneratedTime = image.getTimestamp();
+            mImageDelayedTime = SystemClock.elapsedRealtimeNanos() - imageGeneratedTime;
             data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
             image.close();
 
@@ -942,6 +949,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size);
         LocTracker.ImuPose getNearestPoseAndTime(long time);
         LocTracker.ImuPose getNearestPoseAndTimeForOF(long time);
+        LocTracker.ImuPose getNearestPoseAndTimeForOF2(long time);
         LocTracker.ImuPose getLatestPoseAndTime();
         void resetLocTrackerLinearMoveCount();
         int getLocTrackerLinearMoveCount();

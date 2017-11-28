@@ -36,6 +36,8 @@ public class LocTracker implements SensorEventListener {
     private List<ImuPose> posesRecordRemoved;
     private List<ImuPose> posesRecordForOF;
     private List<ImuPose> posesRecordRemovedForOF;
+    private List<ImuPose> posesRecordForOF2;
+    private List<ImuPose> posesRecordRemovedForOF2;
 
     private int mLinearMoveCount = 0;
 
@@ -47,6 +49,8 @@ public class LocTracker implements SensorEventListener {
         posesRecordRemoved = new ArrayList<>();
         posesRecordForOF = new ArrayList<>();
         posesRecordRemovedForOF = new ArrayList<>();
+        posesRecordForOF2 = new ArrayList<>();
+        posesRecordRemovedForOF2 = new ArrayList<>();
         mTimestamps = new ArrayList<>();
         mLinearAccs = new ArrayList<>();
         mVelocities = new ArrayList<>();
@@ -120,6 +124,7 @@ public class LocTracker implements SensorEventListener {
 
     public class ImuPose {
         public long time;
+        //The pose is PoseAP
         public Transform pose;
         public float[] gyroReading;
         public ImuPose(long t, Transform p, float[] g) {
@@ -147,8 +152,10 @@ public class LocTracker implements SensorEventListener {
         mVelocities.clear();
         posesRecordRemoved.addAll(posesRecord);
         posesRecordRemovedForOF.addAll(posesRecordForOF);
+        posesRecordRemovedForOF2.addAll(posesRecordForOF2);
         posesRecord.clear();
         posesRecordForOF.clear();
+        posesRecordForOF2.clear();
 
         float[] mLinearAcc = new float[4];
         float[] velocitiy = new float[4];
@@ -166,6 +173,7 @@ public class LocTracker implements SensorEventListener {
                                         gyro);
         posesRecord.add(currentPose);
         posesRecordForOF.add(currentPose);
+        posesRecordForOF2.add(currentPose);
         zeroCount = 0;
     }
 
@@ -193,6 +201,32 @@ public class LocTracker implements SensorEventListener {
             }
         }
         return posesRecordForOF.get(posesRecordForOF.size()-1);
+    }
+
+    public ImuPose getNearestPoseAndTimeForOF2(long time) {
+        List<ImuPose> removingPoses = new ArrayList<>();
+        ImuPose result = null;
+        for(int i = 0; i < posesRecordRemovedForOF2.size(); i++) {
+            if(posesRecordRemovedForOF2.get(i).time < time) {
+                removingPoses.add(posesRecordRemovedForOF2.get(i));
+            } else {
+                result = posesRecordRemovedForOF2.get(i);
+                break;
+            }
+        }
+        for(ImuPose pose : removingPoses) {
+            posesRecordRemovedForOF2.remove(pose);
+        }
+        removingPoses.clear();
+        if(result != null) {
+            return result;
+        }
+        for(int i = 0; i < posesRecordForOF2.size(); i++) {
+            if(posesRecordForOF2.get(i).time >= time) {
+                return posesRecordForOF2.get(i);
+            }
+        }
+        return posesRecordForOF2.get(posesRecordForOF2.size()-1);
     }
 
     public ImuPose getNearestPoseAndTime(long time) {
@@ -256,6 +290,8 @@ public class LocTracker implements SensorEventListener {
             }
             posesRecord.get(i).setPosition(mPosition);
             posesRecordForOF.get(i).setPosition(mPosition);
+            posesRecordForOF2.get(i).setPosition(mPosition);
+
             preVelocity = currentVelocity;
         }
         for(int i = residualPos+1; i < posesRecord.size(); i++) {
@@ -263,6 +299,9 @@ public class LocTracker implements SensorEventListener {
         }
         for(int i = residualPos+1; i < posesRecordForOF.size(); i++) {
             posesRecordForOF.get(i).setPosition(mPosition);
+        }
+        for(int i = residualPos+1; i < posesRecordForOF2.size(); i++) {
+            posesRecordForOF2.get(i).setPosition(mPosition);
         }
         if(mStateCallback != null) {
             mStateCallback.onStancePhaseCorrection(posesRecord);
@@ -298,6 +337,7 @@ public class LocTracker implements SensorEventListener {
         ImuPose pose = new ImuPose(eventTime, currentPose, gyro);
         posesRecord.add(pose);
         posesRecordForOF.add(pose);
+        posesRecordForOF2.add(pose);
     }
 
     private boolean inStancePhase() {

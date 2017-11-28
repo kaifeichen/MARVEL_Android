@@ -302,6 +302,13 @@ public class PreviewFragment extends Fragment {
                             paint.setTextSize(size.get(i).floatValue()/mScale);
                             canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
                             paint.setColor(oldColor);
+                        } else if(i == 1) {
+                            int oldColor = paint.getColor();
+                            paint.setColor(Color.BLACK);
+                            canvas.drawRect(rect, paint);
+                            paint.setTextSize(size.get(i).floatValue()/mScale);
+                            canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
+                            paint.setColor(oldColor);
                         } else {
                             canvas.drawRect(rect, paint);
                             paint.setTextSize(size.get(i).floatValue()/mScale);
