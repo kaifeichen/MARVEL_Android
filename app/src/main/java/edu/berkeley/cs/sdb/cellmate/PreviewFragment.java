@@ -314,8 +314,6 @@ public class PreviewFragment extends Fragment {
                             paint.setTextSize(size.get(i).floatValue()/mScale);
                             canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
                         }
-
-
                     }
 
                     mHighLight.setImageBitmap(mBmp);
