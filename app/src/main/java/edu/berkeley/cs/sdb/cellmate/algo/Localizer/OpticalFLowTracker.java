@@ -1,6 +1,7 @@
 package edu.berkeley.cs.sdb.cellmate.algo.Localizer;
 
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.core.MatOfFloat;
@@ -65,9 +66,14 @@ public class OpticalFLowTracker {
         long time = System.currentTimeMillis();
 
         byte[] data = newFrame.getData();
+        int height = newFrame.getHeight();
+        int width = newFrame.getWidth();
 
-        mRgba = Imgcodecs.imdecode(new MatOfByte(data), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
-        System.out.println("decode time" + (System.currentTimeMillis() - time));
+//        mRgba = Imgcodecs.imdecode(new MatOfByte(data), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
+//        System.out.println("decode time" + (System.currentTimeMillis() - time));
+
+        Mat src_gray = new Mat(height, width, CvType.CV_8UC1);
+        src_gray.put(0, 0, data);
 
         long beforeRotateTime = System.currentTimeMillis();
         Camera camera = Camera.getInstance();
@@ -91,7 +97,8 @@ public class OpticalFLowTracker {
             // first time through the loop so we need prev and this mats
             // plus prev points
             // get this mat
-            Imgproc.cvtColor(mRgba, matOpFlowThis, Imgproc.COLOR_RGBA2GRAY);
+//            Imgproc.cvtColor(mRgba, matOpFlowThis, Imgproc.COLOR_RGBA2GRAY);
+            matOpFlowThis = mRgba;
 
             // copy that to prev mat
             matOpFlowThis.copyTo(matOpFlowPrev);
@@ -111,7 +118,8 @@ public class OpticalFLowTracker {
             matOpFlowThis.copyTo(matOpFlowPrev);
 
             // get this mat
-            Imgproc.cvtColor(mRgba, matOpFlowThis, Imgproc.COLOR_RGBA2GRAY);
+//            Imgproc.cvtColor(mRgba, matOpFlowThis, Imgproc.COLOR_RGBA2GRAY);
+            matOpFlowThis = mRgba;
 
             // get the corners for this mat
             Imgproc.goodFeaturesToTrack(matOpFlowThis, MOPcorners, iGFFTMax, 0.05, 10);

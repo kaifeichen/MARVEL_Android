@@ -56,6 +56,7 @@ import org.w3c.dom.NameList;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -287,21 +288,23 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                 return;
             }
 
-            ByteString data;
+
             long imageGeneratedTime = image.getTimestamp();
             mImageDelayedTime = SystemClock.elapsedRealtimeNanos() - imageGeneratedTime;
-            data = ByteString.copyFrom(image.getPlanes()[0].getBuffer());
+            mLatestImageData = imageToBytes(image);
+            int height = image.getHeight();
+            int width = image.getWidth();
             image.close();
 
             //Construct the frame for current image
-            mLatestImageData = new byte[data.size()];
-            data.copyTo(mLatestImageData, 0);
             Camera camera = Camera.getInstance();
             int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
             KeyFrame curFrame = new KeyFrame(
                     imageGeneratedTime,
                     mStateCallback.getNearestPoseAndTime(imageGeneratedTime),
                     mLatestImageData,
+                    height,
+                    width,
                     rotateClockwiseAngle);
 
             //Calculate correct label position and draw
@@ -395,9 +398,9 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
             //doing the optical flow
             //this will take a while
-            opticalFLowTracker.trackFlow(mFrameCacheForOF.get(0));
-            oldFramePoints = opticalFLowTracker.getOldFramePoints();
-            newFramePoints = opticalFLowTracker.getNewFramePoints();
+//            opticalFLowTracker.trackFlow(mFrameCacheForOF.get(0));
+//            oldFramePoints = opticalFLowTracker.getOldFramePoints();
+//            newFramePoints = opticalFLowTracker.getNewFramePoints();
         }
 
 
@@ -727,7 +730,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         Size captureSize = camera.getCaptureSize();
         Size previewSize = camera.getPreviewSize();
         mImageReader = ImageReader.newInstance(captureSize.getWidth(), captureSize.getHeight(),
-                ImageFormat.JPEG, /*maxImages*/2);
+                ImageFormat.YUV_420_888, /*maxImages*/2);
         mImageReader.setOnImageAvailableListener(
                 mOnImageAvailableListener, null);
         mHandler = new Handler();
@@ -1120,5 +1123,34 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         }
         System.out.println("nearest point index = " + minIndex + " in one");
         return minIndex;
+    }
+
+
+    /**
+     * Takes an Android Image in the YUV_420_888 format and returns a byte array.
+     * ref: http://stackoverflow.com/questions/30510928/convert-android-camera2-api-yuv-420-888-to-rgb
+     *
+     * @param image Image in the YUV_420_888 format
+     * @return bytes that contains the image data in greyscale
+     */
+    private byte[] imageToBytes(Image image) {
+        if (image.getFormat() != ImageFormat.YUV_420_888) {
+            return null;
+        }
+
+        int bytesPerPixel = ImageFormat.getBitsPerPixel(ImageFormat.YUV_420_888) / 8;
+        Image.Plane yPlane = image.getPlanes()[0]; // we only need a gray picture
+        int pixelStride = yPlane.getPixelStride();
+        if (bytesPerPixel != 1 || pixelStride != 1) { // they are guaranteed to be both 1 in Y plane
+            throw new RuntimeException("Wrong image format");
+        }
+
+        ByteBuffer buffer = yPlane.getBuffer();
+        int width = image.getWidth();
+        int height = image.getHeight();
+        byte[] data = new byte[width * height];
+        buffer.get(data);
+
+        return data;
     }
 }

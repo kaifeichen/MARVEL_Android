@@ -1,6 +1,7 @@
 package edu.berkeley.cs.sdb.cellmate.data;
 
 import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfByte;
 import org.opencv.imgcodecs.Imgcodecs;
@@ -18,6 +19,8 @@ public class KeyFrame {
     private int mNumOfEdges = -1;
     private float mGyroNorm = -1;
     private byte[] mData;
+    int mHeight;
+    int mWidth;
     private int mRotateClockwiseAngle;
     private int mGyroRank;
     private int mFeatureRank;
@@ -25,20 +28,29 @@ public class KeyFrame {
     private final float GYRO_NORM_UPPER_LIMIT = 0.5f;
     private final int NUM_EDGES_LOWER_LIMIT = 500000;
 
-    public KeyFrame(long time, LocTracker.ImuPose imuPose, byte[] Data, int rotateClockwiseAngle) {
+    public KeyFrame(long time, LocTracker.ImuPose imuPose, byte[] Data, int height, int width,  int rotateClockwiseAngle) {
         mFrameTime = time;
         mImuPose = imuPose;
         mData = Data;
         mRotateClockwiseAngle = rotateClockwiseAngle;
 
+        mHeight = height;
+        mWidth = width;
         //Calculate mGyroNorm
         float[] gyroReading = mImuPose.gyroReading;
         mGyroNorm = (float)Math.sqrt(Math.pow(gyroReading[0], 2)+Math.pow(gyroReading[1], 2)+ Math.pow(gyroReading[2], 2));
 
         //Calculate mNumOfEdges
-        Mat src = Imgcodecs.imdecode(new MatOfByte(mData), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
-        Mat src_gray = new Mat();
-        Imgproc.cvtColor(src, src_gray, Imgproc.COLOR_BGR2GRAY);
+//        Mat src = Imgcodecs.imdecode(new MatOfByte(mData), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
+//        Mat src_gray = new Mat();
+//        Imgproc.cvtColor(src, src_gray, Imgproc.COLOR_BGR2GRAY);
+
+//        cv::Mat img(height, width, CV_8UC1, &(*data)[0]);
+//        Mat src_gray = new Mat(height, width, mData);
+
+        Mat src_gray = new Mat(height, width, CvType.CV_8UC1);
+        src_gray.put(0, 0, mData);
+
         Mat grad_x = new Mat();
         Mat grad_y = new Mat();
         Imgproc.Sobel(src_gray, grad_x, 3, 1, 0, 1, 1, 0);
@@ -136,5 +148,11 @@ public class KeyFrame {
         return false;
     }
 
+    public int getHeight() {
+        return mHeight;
+    }
 
+    public int getWidth() {
+        return mWidth;
+    }
 }

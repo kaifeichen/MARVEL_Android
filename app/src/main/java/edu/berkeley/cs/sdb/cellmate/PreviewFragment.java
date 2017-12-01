@@ -297,10 +297,15 @@ public class PreviewFragment extends Fragment {
                         Rect rect = new Rect(mLeft.get(i).intValue(), mTop.get(i).intValue(), mRight.get(i).intValue(), mBottom.get(i).intValue());
                         if(i == 0) {
                             int oldColor = paint.getColor();
-                            paint.setColor(Color.GREEN);
-                            canvas.drawRect(rect, paint);
-                            paint.setTextSize(size.get(i).floatValue()/mScale);
-                            canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
+                            paint.setColor(Color.BLUE);
+                            paint.setStyle(Paint.Style.FILL);
+                            canvas.drawCircle(mLeft.get(i).intValue(),mTop.get(i).intValue(),3,paint);
+                            canvas.drawCircle(mLeft.get(i).intValue(),mBottom.get(i).intValue(),3,paint);
+                            canvas.drawCircle(mRight.get(i).intValue(),mTop.get(i).intValue(),3,paint);
+                            canvas.drawCircle(mRight.get(i).intValue(),mBottom.get(i).intValue(),3,paint);
+//                            canvas.drawRect(rect, paint);
+//                            paint.setTextSize(size.get(i).floatValue()/mScale);
+//                            canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
                             paint.setColor(oldColor);
                         } else if(i == 1) {
                             int oldColor = paint.getColor();
@@ -314,6 +319,7 @@ public class PreviewFragment extends Fragment {
                             paint.setTextSize(size.get(i).floatValue()/mScale);
                             canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
                         }
+                        break;
                     }
 
                     mHighLight.setImageBitmap(mBmp);
