@@ -72,8 +72,8 @@ public class OpticalFLowTracker {
 //        mRgba = Imgcodecs.imdecode(new MatOfByte(data), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
 //        System.out.println("decode time" + (System.currentTimeMillis() - time));
 
-        Mat src_gray = new Mat(height, width, CvType.CV_8UC1);
-        src_gray.put(0, 0, data);
+        mRgba = new Mat(height, width, CvType.CV_8UC1);
+        mRgba.put(0, 0, data);
 
         long beforeRotateTime = System.currentTimeMillis();
         Camera camera = Camera.getInstance();
@@ -105,6 +105,7 @@ public class OpticalFLowTracker {
 
             // get prev corners
             Imgproc.goodFeaturesToTrack(matOpFlowPrev, MOPcorners, iGFFTMax, 0.05, 10);
+
             mMOP2fptsPrev.fromArray(MOPcorners.toArray());
 
             // get safe copy of this corners

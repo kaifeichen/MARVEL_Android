@@ -347,7 +347,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
 
                 for(int i = 0; i < mFrameCache.size(); i++) {
-                    datas.add(ByteString.copyFrom(mFrameCache.get(i).getData()));
+                    datas.add(ByteString.copyFrom(mFrameCache.get(i).getJpegData()));
                     rotateClockwiseAngles.add(mFrameCache.get(i).getmRotateClockwiseAngle());
                     times.add(mFrameCache.get(i).getImuPose().time);
                     blurness.add((float)i);
@@ -355,6 +355,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                     poses.add(getMessageMatrixFromPose(mFrameCache.get(i).getImuPose().pose));
                 }
 
+                System.out.println("debug " + datas.size());
                 sendRequestToServer(datas, rotateClockwiseAngles, times, blurness, poses);
 
             }
@@ -398,9 +399,9 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
             //doing the optical flow
             //this will take a while
-//            opticalFLowTracker.trackFlow(mFrameCacheForOF.get(0));
-//            oldFramePoints = opticalFLowTracker.getOldFramePoints();
-//            newFramePoints = opticalFLowTracker.getNewFramePoints();
+            opticalFLowTracker.trackFlow(mFrameCacheForOF.get(0));
+            oldFramePoints = opticalFLowTracker.getOldFramePoints();
+            newFramePoints = opticalFLowTracker.getNewFramePoints();
         }
 
 
@@ -466,10 +467,10 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         }
 
         if(opticalFlowConfident == 0 && imuConfident == 0) {
-            System.out.println("case 1 offload");
+            System.out.println("debug case 1 offload");
             offLoad();
         } else if((Math.pow(diff.x,2) + Math.pow(diff.y,2)) > diffSquareThresh) {
-            System.out.println("case 2 offload");
+            System.out.println("debug case 2 offload");
             offLoad();
         }
 

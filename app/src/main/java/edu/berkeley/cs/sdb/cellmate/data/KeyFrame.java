@@ -19,6 +19,8 @@ public class KeyFrame {
     private int mNumOfEdges = -1;
     private float mGyroNorm = -1;
     private byte[] mData;
+    private byte[] mJpegData = null;
+    Mat src_gray;
     int mHeight;
     int mWidth;
     private int mRotateClockwiseAngle;
@@ -48,7 +50,7 @@ public class KeyFrame {
 //        cv::Mat img(height, width, CV_8UC1, &(*data)[0]);
 //        Mat src_gray = new Mat(height, width, mData);
 
-        Mat src_gray = new Mat(height, width, CvType.CV_8UC1);
+        src_gray = new Mat(height, width, CvType.CV_8UC1);
         src_gray.put(0, 0, mData);
 
         Mat grad_x = new Mat();
@@ -154,5 +156,18 @@ public class KeyFrame {
 
     public int getWidth() {
         return mWidth;
+    }
+
+    public byte[] getJpegData() {
+        if(mJpegData == null) {
+            MatOfByte buff = new MatOfByte();
+            if(Imgcodecs.imencode(".jpg", src_gray, buff)) {
+                mJpegData = buff.toArray();
+            } else {
+                int[] array = new int[2];
+                array[5] = 10;
+            }
+        }
+        return mJpegData;
     }
 }
