@@ -36,6 +36,14 @@ import java.util.PriorityQueue;
 import edu.berkeley.cs.sdb.cellmate.view.AutoFitTextureView;
 
 
+
+import com.google.zxing.BarcodeFormat;
+import com.google.zxing.MultiFormatWriter;
+import com.google.zxing.WriterException;
+import com.google.zxing.common.BitMatrix;
+import com.journeyapps.barcodescanner.BarcodeEncoder;
+
+
 public class PreviewFragment extends Fragment {
 
 
@@ -105,6 +113,7 @@ public class PreviewFragment extends Fragment {
     };
     private Size highlightFrameSize = null;
     private ImageView mHighLight;
+    private ImageView mBarcode;
     private StateCallback mStateCallback;
 
     public static PreviewFragment newInstance() {
@@ -125,6 +134,7 @@ public class PreviewFragment extends Fragment {
         mTextureView.setSurfaceTextureListener(mSurfaceTextureListener);
 
         mHighLight = (ImageView) view.findViewById(R.id.imageView);
+        mBarcode = (ImageView) view.findViewById(R.id.barcode);
         view.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View view, MotionEvent motionEvent) {
@@ -354,5 +364,18 @@ public class PreviewFragment extends Fragment {
 
     public interface StateCallback {
         void previewOnClicked(boolean isTargeting, String target);
+    }
+
+    public void showBarcode(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
+        String text = name.get(0) + " " + x.get(0) + " " + y.get(0); // Whatever you need to encode in the QR code
+        MultiFormatWriter multiFormatWriter = new MultiFormatWriter();
+        try {
+            BitMatrix bitMatrix = multiFormatWriter.encode(text, BarcodeFormat.QR_CODE, 200, 200);
+            BarcodeEncoder barcodeEncoder = new BarcodeEncoder();
+            Bitmap bitmap = barcodeEncoder.createBitmap(bitMatrix);
+            mBarcode.setImageBitmap(bitmap);
+        } catch (WriterException e) {
+            e.printStackTrace();
+        }
     }
 }

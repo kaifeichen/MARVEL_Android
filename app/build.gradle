@@ -74,4 +74,7 @@ dependencies {
     compile "io.grpc:grpc-stub:${grpcVersion}" // CURRENT_GRPC_VERSION
     compile 'javax.annotation:javax.annotation-api:1.2'
     compile 'com.github.davidmigloz:opencv-android-gradle-repo:3.2.0'
+
+    compile 'com.google.zxing:core:3.3.0'
+    compile 'com.journeyapps:zxing-android-embedded:3.2.0@aar'
 }

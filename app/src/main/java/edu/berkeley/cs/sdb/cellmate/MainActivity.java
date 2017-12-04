@@ -74,7 +74,8 @@ public class MainActivity extends AppCompatActivity implements ActivityCompat.On
     public void onObjectIdentified(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
         PreviewFragment previewFragment = (PreviewFragment) getFragmentManager().findFragmentById(R.id.preview_fragment);
         if (previewFragment != null) {
-            previewFragment.drawHighlight(name, x, y, size);
+            previewFragment.showBarcode(name, x, y, size);
+//            previewFragment.drawHighlight(name, x, y, size);
         }
 
     }
