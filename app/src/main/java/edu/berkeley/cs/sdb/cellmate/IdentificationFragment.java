@@ -3,6 +3,7 @@ package edu.berkeley.cs.sdb.cellmate;
 import edu.berkeley.cs.sdb.cellmate.algo.Localizer.LocTracker;
 import edu.berkeley.cs.sdb.cellmate.algo.Localizer.OpticalFLowTracker;
 import edu.berkeley.cs.sdb.cellmate.data.KeyFrame;
+import edu.berkeley.cs.sdb.cellmate.data.SortingElement;
 import edu.berkeley.cs.sdb.snaplink.*;
 import android.app.Activity;
 import android.app.Fragment;
@@ -160,46 +161,75 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                 activity.runOnUiThread(() -> {
                     try {
                         offloading = false;
-                        System.out.println("offload back");
+                        System.out.println("debug3.3 offload back");
 
-                        if(!value.getSuccess()) {
-                            return;
-                        }
 
                         mStateCallback.resetLocTrackerLinearMoveCount();
                         double oldOpticalFlowConfident = opticalFlowConfident;
                         opticalFlowConfident = 1;
                         imuConfident = 1;
+                        System.out.println("debug3 step1");
 
 
 
                         Transform currentPoseMS = null;
-                        if(value.getRequestId() > mCurrentPoseMATime) {
-                            Transform PoseMI = getPoseFromMessage(value);
-                            Poses poses = mPosesMap.get(value.getRequestId());
-                            poses.PoseMI = PoseMI;
-                            Transform PoseSIinv = poses.PoseSI.inverse();
-                            Transform PoseAPinv = poses.PoseAP.inverse();
-                            Transform PosePSinv = getPosePS().inverse();
-                            Long oldPoseMATime = mCurrentPoseMATime;
-                            mCurrentPoseMATime = value.getRequestId();
-                            mCurrentPoseMA = PoseMI.multiply(PoseSIinv).multiply(PosePSinv).multiply(PoseAPinv);
+                        if(value.getRequestId(0) > mCurrentPoseMATime) {
+                            System.out.println("debug3 step2");
+                            List<Transform> PoseMIs = getPoseFromMessage(value);
+                            List<Transform> PoseMAs = new ArrayList<>();
+                            List<Long> PosesTimes = new ArrayList<Long>();
+                            System.out.println("debug3 step3");
+                            for(int i = 0; i < PoseMIs.size(); i++) {
+                                System.out.println("debug3 step3.1");
+                                if(!value.getSuccess(i)) {
+                                    System.out.println("debug3.4 fail index" + i);
+                                    mPosesMap.remove(value.getRequestId(i));
+                                    continue;
+                                }
+                                System.out.println("debug3 step3.2");
+                                System.out.println("debug3 step3.9 key=" + value.getRequestId(i));
+                                Poses poses = mPosesMap.get(value.getRequestId(i));
+                                if(poses == null) {
+                                    System.out.println("debug3 step3.2 poses is null");
+                                }
+                                System.out.println("debug3 step3.2.1 i=" + i + " size=" + PoseMIs.size());
+                                poses.PoseMI = PoseMIs.get(i);
+                                System.out.println("debug3 step3.2.2");
+                                Transform PoseSIinv = poses.PoseSI.inverse();
+                                System.out.println("debug3 step3.2.3");
+                                Transform PoseAPinv = poses.PoseAP.inverse();
+                                System.out.println("debug3 step3.2.4");
+                                Transform PosePSinv = getPosePS().inverse();
+
+                                System.out.println("debug3 step3.3");
+                                Transform tempPoseMA = PoseMIs.get(i).multiply(PoseSIinv).multiply(PosePSinv).multiply(PoseAPinv);
+                                PoseMAs.add(tempPoseMA);
+                                PosesTimes.add(value.getRequestId(i));
+                                if(poses.PoseAPCorected) {
+                                    //remove this query event poses if it is corrected by LocTracker already
+                                    mPosesMap.remove(value.getRequestId(i));
+                                }
+                            }
+
+                            System.out.println("debug3 step4");
+                            int bestPoseMAindex = bestPoseMAindex(PoseMAs);
+                            mCurrentPoseMA = PoseMAs.get(bestPoseMAindex);
+                            mCurrentPoseMATime = PosesTimes.get(bestPoseMAindex);
+
+                            System.out.println("debug3 step5");
                             Transform currentPoseAP = mStateCallback.getLatestPoseAndTime().pose;
                             currentPoseMS = mCurrentPoseMA.multiply(currentPoseAP).multiply(getPosePS());
                             mCurrentPoseMS = currentPoseMS;
-                            if(poses.PoseAPCorected) {
-                                //remove this query event poses if it is corrected by LocTracker already
-                                mPosesMap.remove(value.getRequestId());
-                            }
-                            if(mPosesMap.containsKey(oldPoseMATime)) {
-                                //remove old query event poses since it is no longer meaningful, given that we have a newer one
-                                mPosesMap.remove(oldPoseMATime);
-                            }
                         } else {
+                            System.out.println("debug3 shouldnt be here");
                             //remove this query event poses if it is outdated
-                            mPosesMap.remove(value.getRequestId());
+                            for(long id : value.getRequestIdList()) {
+                                mPosesMap.remove(id);
+                            }
                         }
+                        System.out.println("debug3 must be here");
                         mRoomId = value.getDbId();
+                        System.out.println("debug3 dbid = " + mRoomId);
 
                         //Set Optical flow label position
                         long ofTime = SystemClock.elapsedRealtimeNanos()-mImageDelayedTime;
@@ -252,6 +282,88 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             showToast("Server is disconnected due to grpc complete", Toast.LENGTH_LONG);
         }
     };
+
+    private int bestPoseMAindex(List<Transform> PoseMSList) {
+        //Construct 2 matrix, one for angleDifference, one for posDifference
+        List<List<Double>> angleDiffs = new ArrayList<>();
+        List<List<Double>> posDiffs = new ArrayList<>();
+        for(int i = 0; i < PoseMSList.size(); i++) {
+            List<Double> subAngleDiffs = new ArrayList<>();
+            List<Double> subPosDiff = new ArrayList<>();
+            for(int j = 0; j < PoseMSList.size(); j++) {
+                double angleDiff = 0;
+                if(i!=j) {
+                    angleDiff = PoseMSList.get(i).getAngleDiff(PoseMSList.get(j));
+                }
+                double posDiff = PoseMSList.get(i).getPositionDiff(PoseMSList.get(j));
+                subAngleDiffs.add(angleDiff);
+                subPosDiff.add(posDiff);
+            }
+            angleDiffs.add(subAngleDiffs);
+            posDiffs.add(subPosDiff);
+        }
+
+
+        //Base on the 2 matrix above, calculate the sum difference of each PoseMS relative to others
+        List<Double> angleDiffList = new ArrayList<>();
+        List<Double> posDiffList = new ArrayList<>();
+        for(int i = 0; i < angleDiffs.size(); i++) {
+            double angleDiffRowSum = 0;
+            List<Double> subAngleDiffs = angleDiffs.get(i);
+            for(int j = 0; j < subAngleDiffs.size(); j++) {
+                angleDiffRowSum += subAngleDiffs.get(j);
+            }
+            angleDiffList.add(angleDiffRowSum);
+
+            double posDiffsRowSum = 0;
+            List<Double> subPosDiffs = posDiffs.get(i);
+            for(int j = 0; j < subPosDiffs.size(); j++) {
+                posDiffsRowSum += subPosDiffs.get(j);
+            }
+            posDiffList.add(posDiffsRowSum);
+        }
+
+        //Construct a list of SortingElement to sort the PoseMAs
+        List<SortingElement> sortingList = new ArrayList<>();
+        for(int i = 0; i < angleDiffList.size(); i++) {
+            sortingList.add(new SortingElement(i));
+        }
+
+        //First sort by angleDiff
+        for(int i = 0; i < sortingList.size(); i++) {
+            sortingList.get(i).setValue(angleDiffList.get(i));
+        }
+
+        Collections.sort(sortingList);
+
+        //Save the result of angleDiff sort ranking using addRank
+        //At same time, set value to posDiff in order to perform sorting by posDiff
+        for(int i = 0; i < sortingList.size(); i++) {
+            SortingElement element = sortingList.get(i);
+            element.addRank(i);
+            element.setValue(posDiffList.get(element.getIndex()));
+        }
+
+        Collections.sort(sortingList);
+
+        //Add the result of posDiff sort ranking using addRank
+        //At same time, set value to rankSum in order to perform sorting by rankSum
+        for(int i = 0; i < sortingList.size(); i++) {
+            SortingElement element = sortingList.get(i);
+            element.addRank(i);
+            element.setValue(element.getRankSum());
+        }
+
+        Collections.sort(sortingList);
+
+
+        //the first one should have the smallest rank,
+        //meaning have the smallest angleDiff and posDiff to others
+        return sortingList.get(0).getIndex();
+
+    }
+
+
 
     private long mImageDelayedTime = 0;
 
@@ -329,15 +441,18 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         if(offloading) {
             return;
         }
+        System.out.println("debug3 " + mFrameCache.size());
+        if(mFrameCache.size()<5) {
+            System.out.println("debug3.1 " + mFrameCache.size());
+            return;
+        }
         Runnable senderRunnable = new Runnable() {
             @Override
             public void run() {
                 offloading = true;
                 System.out.println("offload");
                 sortFramesToFindBest();
-                KeyFrame frameToSend = mFrameCache.get(0);
-                Transform pose = frameToSend.getImuPose().pose;
-                mPosesMap.put(frameToSend.getImuPose().time, new Poses(false,pose,null,getPoseSI()));
+
 
                 List<ByteString> datas = new ArrayList<>();
                 List<Integer> rotateClockwiseAngles =  new ArrayList<>();
@@ -346,13 +461,17 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                 List<SnapLinkProto.Matrix> poses = new ArrayList<>();
 
 
-                for(int i = 0; i < mFrameCache.size(); i++) {
-                    datas.add(ByteString.copyFrom(mFrameCache.get(i).getJpegData()));
-                    rotateClockwiseAngles.add(mFrameCache.get(i).getmRotateClockwiseAngle());
-                    times.add(mFrameCache.get(i).getImuPose().time);
+                for(int i = 0; i < 5; i++) {
+                    KeyFrame frameToSend = mFrameCache.get(i);
+                    Transform pose = frameToSend.getImuPose().pose;
+                    System.out.println("debug3 step3.8 key=" + frameToSend.getImuPose().time);
+                    mPosesMap.put(frameToSend.getImuPose().time, new Poses(false,pose,null,getPoseSI()));
+                    datas.add(ByteString.copyFrom(frameToSend.getJpegData()));
+                    rotateClockwiseAngles.add(frameToSend.getmRotateClockwiseAngle());
+                    times.add(frameToSend.getImuPose().time);
                     blurness.add((float)i);
-                    mFrameCache.get(i).getImuPose().pose.print();
-                    poses.add(getMessageMatrixFromPose(mFrameCache.get(i).getImuPose().pose));
+                    frameToSend.getImuPose().pose.print();
+                    poses.add(getMessageMatrixFromPose(frameToSend.getImuPose().pose));
                 }
 
                 System.out.println("debug " + datas.size());
@@ -607,11 +726,15 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         return new IdentificationFragment();
     }
 
-    private Transform getPoseFromMessage(SnapLinkProto.LocalizationResponse value) {
-        SnapLinkProto.Matrix matrix = value.getPose();
-        return new Transform(matrix.getData(0), matrix.getData(1), matrix.getData(2), matrix.getData(3),
-                matrix.getData(4), matrix.getData(5), matrix.getData(6), matrix.getData(7),
-                matrix.getData(8), matrix.getData(9), matrix.getData(10), matrix.getData(11));
+    private List<Transform> getPoseFromMessage(SnapLinkProto.LocalizationResponse value) {
+        List<Transform> retVal = new ArrayList<>();
+        for(int i = 0; i < value.getPoseList().size(); i++) {
+            SnapLinkProto.Matrix matrix = value.getPose(i);
+            retVal.add(new Transform(matrix.getData(0), matrix.getData(1), matrix.getData(2), matrix.getData(3),
+                    matrix.getData(4), matrix.getData(5), matrix.getData(6), matrix.getData(7),
+                    matrix.getData(8), matrix.getData(9), matrix.getData(10), matrix.getData(11)));
+        }
+        return retVal;
     }
 
     private SnapLinkProto.Matrix getMessageMatrixFromPose(Transform transform) {
@@ -675,6 +798,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                     .addAllBlurness(blurness)
                     .addAllPoses(poses)
                     .build();
+            System.out.println("debug3.2 " + datas.size());
             mRequestObserver.onNext(request);
         } catch (RuntimeException e) {
             // Cancel RPC
@@ -751,6 +875,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         mPosesMap = new HashMap<>();
         mLabels = new HashMap<>();
 
+        System.out.println("onActivityCreated pre2");
         try {
             mChannel = ManagedChannelBuilder.forAddress(mHost, Integer.valueOf(mPort)).usePlaintext(true).build();
             GrpcServiceGrpc.GrpcServiceBlockingStub stub = GrpcServiceGrpc.newBlockingStub(mChannel);
@@ -775,6 +900,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             e.printStackTrace();
         }
 
+        System.out.println("onActivityCreated pre3");
         mRequestObserver = createNewRequestObserver();
 
         System.out.println("onActivityCreated");
@@ -874,6 +1000,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         CameraModel camera = new CameraModel("CameraModel",
                 new Size((int)width,(int)height),
                 mFx, mFy, Math.min(mCx,mCy), Math.max(mCx,mCy));
+        System.out.println("debug4 nextline should appear, if not mLabels is null");
+        System.out.println("debug4 mLabels.size() = " + mLabels.size() + " mRoomId="+ mRoomId);
         if (mLabels.get(mRoomId).isEmpty()) {
             return;
         }

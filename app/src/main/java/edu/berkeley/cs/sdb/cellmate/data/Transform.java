@@ -44,10 +44,10 @@ public class Transform {
     }
 
     public void print(){
-        System.out.print( r11() + " " + r12() + " " + r13() + " " + x() + "\n"
-                + r21() + " " + r22() + " " + r23() + " " + y() + "\n"
-                + r31() + " " + r32() + " " + r33() + " " + z() + "\n"
-                + 0     + " " + 0     + " " + 0     + " " + 1   + "\n");
+        System.out.print("debug3 " + r11() + " " + r12() + " " + r13() + " " + x() + "\n"
+                +"debug3 "+ r21() + " " + r22() + " " + r23() + " " + y() + "\n"
+                +"debug3 " + r31() + " " + r32() + " " + r33() + " " + z() + "\n"
+                +"debug3 "+ 0     + " " + 0     + " " + 0     + " " + 1   + "\n");
 
     }
 
@@ -116,6 +116,12 @@ public class Transform {
         return new Transform(inversed);
     }
 
+    public Transform transpose() {
+        float[] transpose = new float[16];
+        Matrix.transposeM(transpose, 0, mData, 0);
+        return new Transform(transpose);
+    }
+
     public Transform multiply(Transform t) {
         float[] a = fromTransformToOpenGlMatrix(this);
         float[] b = fromTransformToOpenGlMatrix(t);
@@ -152,6 +158,25 @@ public class Transform {
         return new Transform(t[0], t[4], t[8], t[12],
                 t[1], t[5], t[9], t[13],
                 t[2], t[6], t[10],t[14]);
+    }
+
+    public double getAngleDiff(Transform other) {
+        double result;
+        Transform transform = this.transpose().multiply(other);
+        double trace = transform.r11() + transform.r22() + transform.r33();
+        double rad = Math.acos((trace - 1) / 2);
+        result = Math.toDegrees(rad);
+
+        return result;
+    }
+
+    public double getPositionDiff(Transform other) {
+        double result;
+        double dx = this.x() - other.x();
+        double dy = this.y() - other.y();
+        double dz = this.z() - other.z();
+        result = dx*dx + dy*dy + dz*dz;
+        return result;
     }
 
 

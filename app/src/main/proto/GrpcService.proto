@@ -58,10 +58,10 @@ message LocalizationRequest {
 }
 
 message LocalizationResponse {
-    uint64 request_id = 1;
-    bool success = 2;
+    repeated uint64 request_id = 1;
+    repeated bool success = 2;
     uint32 db_id = 3;
-    Matrix pose = 4;
+    repeated Matrix pose = 4;
     repeated Item items = 5; // for test purpose only
     uint32 width = 6;
     uint32 height = 7;
