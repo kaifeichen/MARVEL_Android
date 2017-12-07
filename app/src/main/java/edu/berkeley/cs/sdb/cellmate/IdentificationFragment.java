@@ -100,7 +100,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     private Handler mHandler;
     private boolean mAttached;
     private int REQUEST_INTERVAL = 500;
-    private final int ANGLE_DIFF_LIMIT = 40;
+    private final int ANGLE_DIFF_LIMIT = 5;
     OpticalFLowTracker opticalFLowTracker;
 
     private int frameCount;
@@ -131,7 +131,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     private List<KeyFrame> mFrameCache = new ArrayList<>();
     private int mFrameCacheLimit = 10;
     private List<KeyFrame> mFrameCacheForOF = new ArrayList<>();
-    private final int mFrameCacheForOFLimit = 3;
+    private final int mFrameCacheForOFLimit = 1000;
 
     long mCurrentPoseMATime;
     Transform mCurrentPoseMA;
@@ -147,7 +147,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     private Point opticalFlowLabel = null;
     private Point diff = new Point(0,0);
     private double diffSquareThresh = 100 * 100;
-    private final double opticalFlowStdThresh = 3;
+    private final double opticalFlowStdThresh = 15;
     private double opticalFlowConfident = 0;
     private final double imuCountThread = 200;
     private double imuConfident = 0;
@@ -160,7 +160,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             if (activity != null) {
                 activity.runOnUiThread(() -> {
                     try {
-                        offloading = false;
+//                        offloading = false;
                         System.out.println("debug3.3 offload back");
 
 
@@ -212,6 +212,9 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                             }
 
                             System.out.println("debug3 step4");
+                            if(PoseMAs.size() <= 0) {
+                                return;
+                            }
                             int bestPoseMAindex = bestPoseMAindex(PoseMAs);
                             mCurrentPoseMA = PoseMAs.get(bestPoseMAindex);
                             mCurrentPoseMATime = PosesTimes.get(bestPoseMAindex);
@@ -250,8 +253,13 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                         ArrayList<Float> SizeListOld = new ArrayList<>();
 
                         visibility(currentPoseMS, nameListOld, XListOld, YListOld, SizeListOld);
+                        nameListOld.add(0, "corrected");
+                        XListOld.add(0, XListOld.get(0));
+                        YListOld.add(0, YListOld.get(0));
+                        SizeListOld.add(0, SizeListOld.get(0));
                         nameListOld.add("red");
                         //this function modifying x,y list
+                        nameListOld.add(0,"B");
                         mStateCallback.onObjectIdentified(nameListOld, XListOld, YListOld, SizeListOld);
 
                     } catch (IllegalStateException e) {
@@ -391,6 +399,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                     System.out.println("opticalFlowLabel stancePhaseCorrection " + opticalFlowLabel.x + "  " + opticalFlowLabel.y );
                     stancePhaseJustCorrected = false;
                     diff = new Point(0,0);
+//                    opticalFLowTracker.resetFirstFrame(null);
+                    System.out.println("debug6 step0");
                 }
                 mCurrentPoseMS = currentPoseMS;
             }
@@ -483,46 +493,49 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
     }
 
     Point diff1;
-
+    double opticalFlowPositionDiffThreshold = 0.01;
+    boolean offLoadNow = false;
+    int ofCount = 3;
     private void CalculateLabelAndDraw(KeyFrame curFrame) {
         //Can't do this in onCreate or onResume because at that time the openCV loader is not loded yet
         if(opticalFLowTracker == null) {
             opticalFLowTracker = new OpticalFLowTracker();
         }
 
+        boolean doOpticalFlow = false;
 
-        //opticalFlow
+        if(opticalFLowTracker.latestFrame() == null) {
+            opticalFLowTracker.resetFirstFrame(curFrame);
+        }
+
+        if(!curFrame.isBlur()) {
+//            System.out.println("debug6, 2 frame translation is" + curFrame.getImuPose().pose.getPositionDiff(opticalFLowTracker.latestFrame().getImuPose().pose));
+//            curFrame.getImuPose().pose.print();
+//            opticalFLowTracker.latestFrame().getImuPose().pose.print();
+//            System.out.println("debug6, 2 frame id is" + curFrame.getImuPose().time + "    " + opticalFLowTracker.latestFrame().getImuPose().time);
+//            ofCount++;
+//            if(ofCount > 10) {
+//                doOpticalFlow = true;
+//                ofCount = 0;
+//            }
+            if(curFrame.getImuPose().pose.getPositionDiff(opticalFLowTracker.latestFrame().getImuPose().pose) > opticalFlowPositionDiffThreshold) {
+                doOpticalFlow = true;
+                System.out.println("debug6 doingOF because translaion pos diff = " + curFrame.getImuPose().pose.getPositionDiff(opticalFLowTracker.latestFrame().getImuPose().pose));
+            }
+            if(curFrame.angleDiffInDegree(opticalFLowTracker.latestFrame()) > ANGLE_DIFF_LIMIT) {
+                doOpticalFlow = true;
+                System.out.println("debug6 doingOF because rotation anngle diff = " + curFrame.angleDiffInDegree(opticalFLowTracker.latestFrame()));
+
+            }
+        }
         List<Point> oldFramePoints = null;
         List<Point> newFramePoints = null;
-        mFrameCacheForOF.add(curFrame);
-        if(mFrameCacheForOF.size() >= mFrameCacheForOFLimit) {
-            KeyFrame firstFrame = mFrameCacheForOF.get(0);
 
-            //choose which frame in cache to do optical flow, record it as next anchor frame
-            int index;
-            for(index = mFrameCacheForOF.size() - 1; index > 1; index--) {
-                KeyFrame frame_i =  mFrameCacheForOF.get(index);
-                double angleDiff = frame_i.angleDiffInDegree(firstFrame);
-                boolean isBlur = curFrame.isBlur();
-                if(angleDiff > ANGLE_DIFF_LIMIT || isBlur) {
-                    continue;
-                } else {
-                    break;
-                }
-            }
-
-            //Keep on popping the cache to the newest anchor frame
-            for(int j = 0; j < index; j++) {
-                mFrameCacheForOF.remove(0);
-            }
-
-            //doing the optical flow
-            //this will take a while
-            opticalFLowTracker.trackFlow(mFrameCacheForOF.get(0));
+        if(doOpticalFlow) {
+            opticalFLowTracker.trackFlow(curFrame);
             oldFramePoints = opticalFLowTracker.getOldFramePoints();
             newFramePoints = opticalFLowTracker.getNewFramePoints();
         }
-
 
         Point imuLabel_past = null;
         //Calculating diff (difference between IMU label and IMU+opticalFlow label)
@@ -532,24 +545,28 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
         } else {
             //opticalFlow is performed, we can update diff now
             if(opticalFlowLabel != null) {
+                System.out.println("debug6 of label x = "+ opticalFlowLabel.x + " " + opticalFlowLabel.y);
+
                 List<Integer> closestNPoints = nearestNPointIndex(oldFramePoints, opticalFlowLabel, newFramePoints);
                 if(closestNPoints == null) {
+                    System.out.println("debug6 step1");
                     opticalFlowConfident = 0;
                 } else {
+                    System.out.println("debug6 step2");
+
                     //this function also update opticalFlow confident
-                    System.out.println("opticalFlowLabel pre " + opticalFlowLabel.x + "  " + opticalFlowLabel.y );
                     opticalFlowLabel = predictLabelWithNearestPoints(closestNPoints,oldFramePoints, opticalFlowLabel, newFramePoints);
-                    System.out.println("opticalFlowLabel aft " + opticalFlowLabel.x + "  " + opticalFlowLabel.y );
-                    System.out.println("opticalFlowLabel **************************************************");
-
-
                 }
                 updateImuConfident();
                 if(opticalFlowConfident == 0) {
+                    System.out.println("debug6 step3");
+
                     //std showing OF inaccurate, probably need to offload to server to calibrate
                     diff = new Point(0,0);
                 } else {
                     //Calcluate IMU label, then diff
+                    System.out.println("debug6 step4");
+
                     long t0 = curFrame.getFrameTime();
                     Transform poseAP_t0 = mStateCallback.getNearestPoseAndTimeForOF(t0).pose;
                     Transform poseMS_t0 = mCurrentPoseMA.multiply(poseAP_t0.multiply(getPosePS()));
@@ -567,29 +584,38 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                     double weightedY = imuLabel.y * imuWeight + opticalFlowLabel.y * opticalFlowWeight;
                     Point combinedLabel = new Point(weightedX, weightedY);
                     diff = new Point(imuLabel.x - combinedLabel.x, imuLabel.y - combinedLabel.y);
-
-                    if(mCurrentPoseMS != null) {
-                        ArrayList<String> nameList1 = new ArrayList<>();
-                        ArrayList<Float> XList1 = new ArrayList<>();
-                        ArrayList<Float> YList1 = new ArrayList<>();
-                        ArrayList<Float> SizeList1 = new ArrayList<>();
-                        visibility(mCurrentPoseMS, nameList1, XList1, YList1, SizeList1);
-                        if(nameList1.get(0) != "None") {
-                            diff1 = new Point(XList1.get(0) - XList.get(0), YList1.get(0) - YList.get(0));
-                        }
-                    }
+                    System.out.println("debug6 imuLabel" + imuLabel.x + "  " + imuLabel.y);
+                    System.out.println("debug6 opticalFlowLabel" + opticalFlowLabel.x + "  " + opticalFlowLabel.y);
+                    System.out.println("debug6 diff" + diff.x + "  " + diff.y);
+//                    if(mCurrentPoseMS != null) {
+//                        ArrayList<String> nameList1 = new ArrayList<>();
+//                        ArrayList<Float> XList1 = new ArrayList<>();
+//                        ArrayList<Float> YList1 = new ArrayList<>();
+//                        ArrayList<Float> SizeList1 = new ArrayList<>();
+//                        visibility(mCurrentPoseMS, nameList1, XList1, YList1, SizeList1);
+//                        if(nameList1.get(0) != "None") {
+//                            diff1 = new Point(XList1.get(0) - XList.get(0), YList1.get(0) - YList.get(0));
+//                            System.out.println("debug6 diff1" + diff1.x + "  " + diff1.y);
+//                        }
+//                    }
 
                 }
             } else {
+                System.out.println("debug6 dont be here");
                 diff = new Point(0,0);
             }
         }
 
         if(opticalFlowConfident == 0 && imuConfident == 0) {
             System.out.println("debug case 1 offload");
+            offLoadNow = true;
+//            opticalFLowTracker.resetFirstFrame(curFrame);
+//            opticalFLowTracker.resetFirstFrame(null);
             offLoad();
         } else if((Math.pow(diff.x,2) + Math.pow(diff.y,2)) > diffSquareThresh) {
             System.out.println("debug case 2 offload");
+            offLoadNow = true;
+//            opticalFLowTracker.resetFirstFrame(curFrame);
             offLoad();
         }
 
@@ -603,10 +629,16 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
 //            use opticalflow_past and imu_past to update imu_now
             if(nameList.get(0) != "None") {
-                nameList.add("corrected");
-                XList.add(XList.get(0) - (float)diff.x);
-                YList.add(YList.get(0) - (float)diff.y);
-                SizeList.add(SizeList.get(0));
+                nameList.add(0,"corrected");
+                XList.add(0,XList.get(0) - (float)diff.x);
+                YList.add(0,YList.get(0) - (float)diff.y);
+                SizeList.add(0,SizeList.get(0));
+                if(offLoadNow) {
+                    offLoadNow = false;
+                    nameList.add(0,"O");
+                } else {
+                    nameList.add(0,"N");
+                }
                 nameList.add("optFlow");
                 XList.add((float)opticalFlowLabel.x);
                 YList.add((float)opticalFlowLabel.y);
@@ -838,6 +870,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                              Bundle savedInstanceState) {
         mView = inflater.inflate(R.layout.identification_fragment, container, false);
         System.out.println("onCreateView");
+
         return mView;
     }
 
@@ -1135,9 +1168,13 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
 
     @Override
     public void onStancePhaseCorrection(List<LocTracker.ImuPose> posesRecord) {
+        System.out.println("debug6 onStancePhaseCorrection coems in");
         List<Long> removingEntries = new LinkedList<>();
+        stancePhaseJustCorrected = true;
+        System.out.println("debug6 onStancePhaseCorrection happended");
         for(LocTracker.ImuPose node : posesRecord) {
             if(mPosesMap.keySet().contains(node.time)) {
+
                 Poses poses = mPosesMap.get(node.time);
                 poses.PoseAP = node.pose;
                 poses.PoseAPCorected = true;
@@ -1148,7 +1185,8 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
                         Transform PosePSinv0 = getPosePS().inverse();
                         mCurrentPoseMATime = node.time;
                         mCurrentPoseMA = poses.PoseMI.multiply(PoseSIinv0).multiply(PosePSinv0).multiply(PoseAPinv);
-                        stancePhaseJustCorrected = true;
+
+
                     }
                     removingEntries.add(node.time);
                 }
@@ -1211,7 +1249,7 @@ public class IdentificationFragment extends Fragment implements LocTracker.State
             double newY = pt2.y - deltaY;
             predictedYList.add(newY);
         }
-        System.out.println("std is " + (std(predictedXList) + std(predictedYList)));
+        System.out.println("debug6 std is " + (std(predictedXList) + std(predictedYList)));
         if(std(predictedXList) + std(predictedYList) > opticalFlowStdThresh) {
             opticalFlowConfident = 0;
         } else {

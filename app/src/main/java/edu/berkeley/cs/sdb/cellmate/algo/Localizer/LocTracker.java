@@ -101,7 +101,7 @@ public class LocTracker implements SensorEventListener {
 
             boolean linearMove = false;
             for (int i = 0; i < mLinearAcc.length; i++) {
-                if (abs(mLinearAcc[i]) < ACC_THRESHOLD) {
+                if (abs(mLinearAcc[i]) < 0.35) {
                     mLinearAcc[i] = 0.0f;
                 }  else {
                     linearMove = true;
@@ -338,6 +338,7 @@ public class LocTracker implements SensorEventListener {
         posesRecord.add(pose);
         posesRecordForOF.add(pose);
         posesRecordForOF2.add(pose);
+        System.out.println("debug8 " + mPosition[0] + " " + mPosition[1] + " " + mPosition[2]);
     }
 
     private boolean inStancePhase() {

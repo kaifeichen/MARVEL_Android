@@ -44,10 +44,10 @@ public class Transform {
     }
 
     public void print(){
-        System.out.print("debug3 " + r11() + " " + r12() + " " + r13() + " " + x() + "\n"
-                +"debug3 "+ r21() + " " + r22() + " " + r23() + " " + y() + "\n"
-                +"debug3 " + r31() + " " + r32() + " " + r33() + " " + z() + "\n"
-                +"debug3 "+ 0     + " " + 0     + " " + 0     + " " + 1   + "\n");
+        System.out.print("debug6 " + r11() + " " + r12() + " " + r13() + " " + x() + "\n"
+                +"debug6 "+ r21() + " " + r22() + " " + r23() + " " + y() + "\n"
+                +"debug6 " + r31() + " " + r32() + " " + r33() + " " + z() + "\n"
+                +"debug6 "+ 0     + " " + 0     + " " + 0     + " " + 1   + "\n"+"debug6 \n");
 
     }
 
@@ -175,7 +175,7 @@ public class Transform {
         double dx = this.x() - other.x();
         double dy = this.y() - other.y();
         double dz = this.z() - other.z();
-        result = dx*dx + dy*dy + dz*dz;
+        result = Math.sqrt(dx*dx + dy*dy + dz*dz);
         return result;
     }
 

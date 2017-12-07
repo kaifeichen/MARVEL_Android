@@ -12,6 +12,7 @@ import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.video.Video;
 
+import java.security.Key;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -55,49 +56,17 @@ public class OpticalFLowTracker {
     }
 
     public void trackFlow(KeyFrame newFrame) {
-        if(mOldFrame == null) {
-            mOldFrame = newFrame;
-            mNewFrame = newFrame;
-        }  else {
-            mOldFrame = mNewFrame;
-            mNewFrame = newFrame;
-        }
-
+        mOldFrame = mNewFrame;
+        mNewFrame = newFrame;
         long time = System.currentTimeMillis();
 
-        byte[] data = newFrame.getData();
-        int height = newFrame.getHeight();
-        int width = newFrame.getWidth();
+        mRgba = getMatFromFrame(newFrame);
 
-//        mRgba = Imgcodecs.imdecode(new MatOfByte(data), Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
-//        System.out.println("decode time" + (System.currentTimeMillis() - time));
+        if (mMOP2fptsSafe.rows() == 0) {
 
-        mRgba = new Mat(height, width, CvType.CV_8UC1);
-        mRgba.put(0, 0, data);
-
-        long beforeRotateTime = System.currentTimeMillis();
-        Camera camera = Camera.getInstance();
-        int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
-        int orientation = 1;
-        if(rotateClockwiseAngle == 90) {
-            orientation = 8;
-        } else if(rotateClockwiseAngle == 180) {
-            orientation = 3;
-        } else if(rotateClockwiseAngle == 270) {
-            orientation = 6;
-        } else {
-            orientation = 1;
-        }
-        mRgba = rotateImage(mRgba, orientation);
-        System.out.println("rotate time" + (System.currentTimeMillis() - beforeRotateTime));
-
-        if (mMOP2fptsPrev.rows() == 0) {
-
-            //Log.d("Baz", "First time opflow");
             // first time through the loop so we need prev and this mats
             // plus prev points
             // get this mat
-//            Imgproc.cvtColor(mRgba, matOpFlowThis, Imgproc.COLOR_RGBA2GRAY);
             matOpFlowThis = mRgba;
 
             // copy that to prev mat
@@ -186,5 +155,56 @@ public class OpticalFLowTracker {
 
     public List<Point> getNewFramePoints() {
         return newFramePoints;
+    }
+
+    public void resetFirstFrame(KeyFrame firstFrame) {
+        if(mNewFrame != firstFrame) {
+            mNewFrame = firstFrame;
+            if(firstFrame != null) {
+                matOpFlowThis = getMatFromFrame(firstFrame);
+                mMOP2fptsSafe.fromArray(getGoodFeaturesFromData(matOpFlowThis).toArray());
+            }
+
+        }
+    }
+
+    private Mat getMatFromFrame(KeyFrame frame) {
+        byte[] data = frame.getData();
+        int height = frame.getHeight();
+        int width = frame.getWidth();
+
+        Mat mat;
+
+        mat = new Mat(height, width, CvType.CV_8UC1);
+        mat.put(0, 0, data);
+
+        long beforeRotateTime = System.currentTimeMillis();
+        Camera camera = Camera.getInstance();
+        int rotateClockwiseAngle = (camera.getDeviceOrientation() + 90) % 360;
+        int orientation = 1;
+        if(rotateClockwiseAngle == 90) {
+            orientation = 8;
+        } else if(rotateClockwiseAngle == 180) {
+            orientation = 3;
+        } else if(rotateClockwiseAngle == 270) {
+            orientation = 6;
+        } else {
+            orientation = 1;
+        }
+        mat = rotateImage(mat, orientation);
+        System.out.println("rotate time" + (System.currentTimeMillis() - beforeRotateTime));
+
+        return mat;
+    }
+
+    private MatOfPoint getGoodFeaturesFromData(Mat data) {
+        MatOfPoint goodFeatures = new MatOfPoint();
+        // get prev corners
+        Imgproc.goodFeaturesToTrack(data, goodFeatures, iGFFTMax, 0.05, 10);
+        return goodFeatures;
+    }
+
+    public KeyFrame latestFrame() {
+        return mNewFrame;
     }
 }

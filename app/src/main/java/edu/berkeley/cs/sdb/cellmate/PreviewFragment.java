@@ -242,11 +242,16 @@ public class PreviewFragment extends Fragment {
 
 
     int col = Color.BLUE;
+    int col2 = Color.BLUE;
 
+    //Warnning!
+    //This function modifiying the x,y list to match preview bitmap scale
     public void drawHighlight(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
         final Activity activity = getActivity();
         if (activity != null) {
             activity.runOnUiThread(() -> {
+
+                String prefix = name.remove(0);
 
                 if(name.get(name.size()-1).compareTo("red") == 0) {
                     name.remove(name.size()-1);
@@ -256,6 +261,7 @@ public class PreviewFragment extends Fragment {
                         col = Color.BLUE;
                     }
                 }
+
 
                 if (x.get(0) != -1) {
                     double width = Math.min(mPreviewSize.getWidth(), mPreviewSize.getHeight());
@@ -289,34 +295,38 @@ public class PreviewFragment extends Fragment {
                     mTop.clear();
                     for (int i = 0; i < name.size(); i++) {
                         mName.add(name.get(i));
-                        mRight.add((x.get(i) + size.get(i))/mScale);
-                        mLeft.add((x.get(i) - size.get(i))/mScale);
-                        mBottom.add((y.get(i) + size.get(i))/mScale);
-                        mTop.add((y.get(i) - size.get(i))/mScale);
+                        mRight.add((x.get(i) + 2*size.get(i))/mScale);
+                        mLeft.add((x.get(i) - 2*size.get(i))/mScale);
+                        mBottom.add((y.get(i) + 2*size.get(i))/mScale);
+                        mTop.add((y.get(i) - 2*size.get(i))/mScale);
 
-
-                        Rect rect2 = new Rect((int) 0, (int) 0, (int) (10), (int) (10));
-                        Rect rect3 = new Rect((int) 0, (int) height - 10, (int) (10), (int) (height));
-                        Rect rect4 = new Rect((int) width - 10, (int) 0, (int) (width), (int) (10));
-                        Rect rect5 = new Rect((int) width - 10, (int) height - 10, (int) (width), (int) (height));
-
-                        canvas.drawRect(rect2, paint);
-                        canvas.drawRect(rect3, paint);
-                        canvas.drawRect(rect4, paint);
-                        canvas.drawRect(rect5, paint);
                         Rect rect = new Rect(mLeft.get(i).intValue(), mTop.get(i).intValue(), mRight.get(i).intValue(), mBottom.get(i).intValue());
                         if(i == 0) {
                             int oldColor = paint.getColor();
                             paint.setColor(Color.BLUE);
-                            paint.setStyle(Paint.Style.FILL);
-                            canvas.drawCircle(mLeft.get(i).intValue(),mTop.get(i).intValue(),3,paint);
-                            canvas.drawCircle(mLeft.get(i).intValue(),mBottom.get(i).intValue(),3,paint);
-                            canvas.drawCircle(mRight.get(i).intValue(),mTop.get(i).intValue(),3,paint);
-                            canvas.drawCircle(mRight.get(i).intValue(),mBottom.get(i).intValue(),3,paint);
-//                            canvas.drawRect(rect, paint);
-//                            paint.setTextSize(size.get(i).floatValue()/mScale);
-//                            canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
+//                            paint.setStyle(Paint.Style.FILL);
+//                            canvas.drawCircle(mLeft.get(i).intValue(),mTop.get(i).intValue(),3,paint);
+//                            canvas.drawCircle(mLeft.get(i).intValue(),mBottom.get(i).intValue(),3,paint);
+//                            canvas.drawCircle(mRight.get(i).intValue(),mTop.get(i).intValue(),3,paint);
+//                            canvas.drawCircle(mRight.get(i).intValue(),mBottom.get(i).intValue(),3,paint);
+//                            canvas.drawCircle((int)(x.get(i)/mScale),(int)(y.get(i)/mScale),6,paint);
+                            canvas.drawRect(rect, paint);
+                            paint.setTextSize(size.get(i).floatValue()/mScale);
+                            canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
+
                             paint.setColor(oldColor);
+                            if(prefix == "B") {
+                                if (col2 == Color.BLUE) {
+                                    col2 = Color.RED;
+                                } else {
+                                    col2 = Color.BLUE;
+                                }
+                            }
+                            int oldColor2 = paint.getColor();
+                            paint.setColor(col2);
+                            canvas.drawCircle((int) (width/mScale) - 10, (int) (height/mScale) - 10, 10, paint);
+                            paint.setColor(oldColor2);
+
                         } else if(i == 1) {
                             int oldColor = paint.getColor();
                             paint.setColor(Color.BLACK);
@@ -324,14 +334,14 @@ public class PreviewFragment extends Fragment {
                             paint.setTextSize(size.get(i).floatValue()/mScale);
                             canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
                             paint.setColor(oldColor);
+
                         } else {
                             canvas.drawRect(rect, paint);
                             paint.setTextSize(size.get(i).floatValue()/mScale);
                             canvas.drawText(name.get(i), mLeft.get(i).floatValue(), mBottom.get(i).floatValue(), paint);
+                            break;
                         }
-                        break;
                     }
-
                     mHighLight.setImageBitmap(mBmp);
                 } else {
                     highlightFrameSize = null;
@@ -367,7 +377,9 @@ public class PreviewFragment extends Fragment {
     }
 
     public void showBarcode(List<String> name, List<Float> x, List<Float> y, List<Float> size) {
-        String text = name.get(0) + " " + x.get(0) + " " + y.get(0); // Whatever you need to encode in the QR code
+        String prefix = name.remove(0);
+
+        String text = prefix + " " +  x.get(0) + "_" + y.get(0) + " " + x.get(1) + " " + y.get(1); // Whatever you need to encode in the QR code
         MultiFormatWriter multiFormatWriter = new MultiFormatWriter();
         try {
             BitMatrix bitMatrix = multiFormatWriter.encode(text, BarcodeFormat.QR_CODE, 200, 200);
@@ -377,5 +389,6 @@ public class PreviewFragment extends Fragment {
         } catch (WriterException e) {
             e.printStackTrace();
         }
+        name.add(0,prefix);
     }
 }
