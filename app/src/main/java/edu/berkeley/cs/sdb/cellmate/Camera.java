@@ -146,8 +146,6 @@ public class Camera {
         public void onConfigureFailed(@NonNull CameraCaptureSession session) {
             throw new RuntimeException("on camera configure failed");
         }
-
-
     };
 
     private Camera(Context context) {

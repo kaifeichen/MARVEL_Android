@@ -83,14 +83,13 @@ public class LocTracker implements SensorEventListener {
     @Override
     public final void onSensorChanged(SensorEvent event) {
         eventCount++;
+
         // ignore first IGNORE_EVENT_NUM readings, because we observed that first few readings is really off when the app just started
         if (eventCount < IGNORE_EVENT_NUM) {
             return;
         }
 
         if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
-
-
             Long time = SystemClock.elapsedRealtimeNanos();
             // Android reuses events, so you probably want a copy
             float[] mLinearAcc = new float[4];
@@ -103,15 +102,18 @@ public class LocTracker implements SensorEventListener {
             for (int i = 0; i < mLinearAcc.length; i++) {
                 if (abs(mLinearAcc[i]) < 0.35) {
                     mLinearAcc[i] = 0.0f;
-                }  else {
+                } else {
                     linearMove = true;
                 }
             }
-            if(linearMove) {
+            if (linearMove) {
                 mLinearMoveCount += 1;
             }
             mLinearAccs.add(mLinearAcc);
             updateIMU(event.timestamp);
+
+            Long latency = SystemClock.elapsedRealtimeNanos() - event.timestamp;
+            System.out.println("latency_exp " + Long.toString(latency));
         } else if (event.sensor.getType() == Sensor.TYPE_GAME_ROTATION_VECTOR) {
             // Android reuses events, so you probably want a copy
             System.arraycopy(event.values, 0, mRotVec, 0, event.values.length);
