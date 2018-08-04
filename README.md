@@ -1,18 +1,18 @@
-# CellMate : Visual Appliance Identification and Control in Smart Buildings
-[![Build Status](https://travis-ci.com/kaifeichen/CellMate_Android.svg?token=XjizLR77Z2rgJhyHZZ73&branch=master)](https://travis-ci.com/kaifeichen/CellMate_Android)
+# MARVEL : Mobile Augmented Reality with Viable Energy and Latency
+[![Build Status](https://travis-ci.com/kaifeichen/MARVEL_Android.svg?token=XjizLR77Z2rgJhyHZZ73&branch=master)](https://travis-ci.com/kaifeichen/MARVEL_Android)
 
-## What is CellMate?
-Please refer to the README.md in https://github.com/SoftwareDefinedBuildings/CellMate
+## What is MARVEL?
+Please refer to the README.md in https://github.com/kaifeichen/MARVEL
 
-## How to Install CellMate Android Client?
+## How to Install MARVEL Android Client?
 
 1. Enable installing applications from unknown sources from the Android phone settings. More details can be found [here](https://developer.android.com/distribute/tools/open-distribution.html).
 
-2. Download the latest apk file from [the CellMate Android releases](https://github.com/SoftwareDefinedBuildings/CellMate_Android/releases).
+2. Download the latest apk file from [the MARVEL Android releases](https://github.com/kaifeichen/MARVEL_Android/releases).
 
 2. Open the apk file to install.
 
-## How to Work on CellMate Android Client?
+## How to Work on MARVEL Android Client?
 
 1. Download [Android Studio](https://developer.android.com/studio/index.html) and install [Android NDK](https://developer.android.com/ndk/index.html).
 
@@ -20,7 +20,7 @@ Please refer to the README.md in https://github.com/SoftwareDefinedBuildings/Cel
 
   ```
   cd ~/workspace
-  git clone https://github.com/SoftwareDefinedBuildings/CellMate_Android
+  git clone https://github.com/kaifeichen/MARVEL_Android
   ```
 
 3. Import this project in Android Studio.
@@ -35,20 +35,6 @@ To achieve this, we collect smartphone camera images and other sensor data to pr
 The collected data will be saved and used to improve the system.
 At the moment of writing, all communications to our server are over GRPC and not encrypted. We plan to add authentication and encryption later.
 
-
-## Citation
-You must cite the following paper if you use this code in any ways:
-
-```
-@inproceedings{chen2015intuitive,
-  title={Intuitive Appliance Identification using Image Matching in Smart Buildings},
-  author={Chen, Kaifei and Kolb, John and F{\"u}rst, Jonathan and Hong, Dezhi and Katz, Randy H},
-  booktitle={Proceedings of the 2nd ACM International Conference on Embedded Systems for Energy-Efficient Built Environments},
-  pages={103--104},
-  year={2015},
-  organization={ACM}
-}
-```
 
 ## License
 
